@@ -1,0 +1,22 @@
+# Reference implementation (cloned separately, read-only spec)
+reference/
+
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.wasm
+core/tests/bin/
+
+# Web
+web/node_modules/
+web/dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS/editor
+.DS_Store
