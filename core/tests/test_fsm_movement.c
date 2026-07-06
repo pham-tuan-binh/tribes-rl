@@ -212,7 +212,7 @@ static void test_move_zoc_and_blockers(void) {
 static void test_move_roads(void) {
     // Roads halve step cost (min 0.5): warrior MOV 1 on a road line reaches 2 tiles.
     board_reset(7);
-    for (int x = 0; x < 7; x++) S.road[tile_idx(&S, x, 3)] = 1;
+    for (int x = 0; x < 7; x++) S.net_tile[tile_idx(&S, x, 3)] = 1;
     int w = add_unit(UNIT_WARRIOR, 0, 1, 3, STATUS_FRESH);
     poly_reachable(&S, w, dests);
     CHECK(dests[tile_idx(&S, 2, 3)]);

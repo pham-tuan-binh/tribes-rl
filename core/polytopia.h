@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "constants.h"
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,8 @@ typedef struct {
     int8_t city;          // owning city index, -1 = tribe-owned ("extra" unit)
 } Unit;
 
+#define CITY_MAX_UNITS 16   // Java list is unbounded; cap = level+1 makes >15 unreachable in practice
+
 typedef struct {
     int8_t owner;         // player index, -1 = neutral (village not yet a city slot)
     int8_t x, y;
@@ -39,7 +42,7 @@ typedef struct {
     bool has_walls;
     int8_t bound;               // border radius, starts 1
     int8_t num_units;           // units housed (cap = level+1)
-    // temple state is tracked per building via the building arrays below
+    int16_t unit_ids[CITY_MAX_UNITS];  // insertion-ordered (Java unitsID list)
 } City;
 
 typedef struct {
@@ -52,6 +55,11 @@ typedef struct {
     uint32_t techs;             // bitset over Tech (NUM_TECH = 24 fits in u32)
     uint8_t monuments[NUM_MONUMENTS];  // MonumentStatus, indexed building-12
     GameResult result;
+    // owned cities, insertion-ordered (Java Tribe.citiesID; order feeds
+    // the seeded shuffles in capture unit-redistribution)
+    int8_t city_list[MAX_CITIES];
+    int8_t num_cities;
+    uint64_t connected_cities;  // bitset over city index (trade-connected to capital)
     // fog of war: bitset over tiles, kept even in full-obs mode
     uint8_t obs[(MAX_TILES + 7) / 8];
 } Player;
@@ -63,7 +71,7 @@ typedef struct {
     int8_t building[MAX_TILES];     // BuildingType (BUILDING_NONE = empty)
     int16_t unit_at[MAX_TILES];     // unit index, -1 = empty
     int8_t city_at[MAX_TILES];      // owning city index (border), -1 = unowned
-    uint8_t road[MAX_TILES];        // road/trade-network membership
+    uint8_t net_tile[MAX_TILES];    // Java TradeNetwork.networkTiles: roads, ports, city centers
     // temple levels/counters, parallel to building plane (0 unless temple there)
     int8_t temple_level[MAX_TILES];
     int8_t temple_turns[MAX_TILES];
@@ -296,8 +304,14 @@ static inline bool poly_traversable(const PolyState* s, int x, int y, int player
 // (reachable, empty, != start) and returns their count.
 // ---------------------------------------------------------------------------
 
+// Board.isRoad: network tile that is not water and not a city center.
+static inline bool poly_is_road(const PolyState* s, int t) {
+    return s->net_tile[t] && !terrain_is_water((Terrain)s->terrain[t]) &&
+           s->terrain[t] != TERRAIN_CITY;
+}
+// StepMove treats city centers as roads for the discount.
 static inline bool poly_is_road_like(const PolyState* s, int t) {
-    return s->road[t] || s->terrain[t] == TERRAIN_CITY;
+    return poly_is_road(s, t) || s->terrain[t] == TERRAIN_CITY;
 }
 // "friendly or neutral" road/city tile from the mover's perspective
 static inline bool poly_road_usable(const PolyState* s, int t, int player) {
@@ -409,11 +423,561 @@ static inline int poly_reachable(const PolyState* s, int unit_idx, uint8_t* dest
 }
 
 // ---------------------------------------------------------------------------
-// Push (Board.pushUnit order: S,W,N,E,SW,NW,NE,NE — arrays verbatim
-// from Board.java:295-296; coordinates are (x=col, y=row) in our layout)
+// City economy & building effects (City.java, Temple state in board planes)
+// ---------------------------------------------------------------------------
+
+// City.addPopulation(tribe, value): clamp at -level; score goes to the PASSED
+// player (not necessarily the city's owner — e.g. network drops on cities the
+// player just lost), pointsWorth stays with the city.
+static inline void city_add_population_for(PolyState* s, int ci, int value, int score_player) {
+    City* c = &s->cities[ci];
+    if (c->population + value < -c->level) value = -c->level - c->population;
+    c->population = (int16_t)(c->population + value);
+    s->players[score_player].score += value * POINTS_PER_POPULATION;
+    c->points_worth = (int16_t)(c->points_worth + value * POINTS_PER_POPULATION);
+}
+static inline void city_add_population(PolyState* s, int ci, int value) {
+    city_add_population_for(s, ci, value, s->cities[ci].owner);
+}
+
+static inline void city_add_production(City* c, int prod) {
+    c->production = (int16_t)(c->production + prod);
+    if (c->production < 0) c->production = 0;
+}
+
+static inline bool city_can_add_unit(const City* c) {
+    return c->num_units < c->level + 1 && c->num_units < CITY_MAX_UNITS;
+}
+static inline void city_add_unit(PolyState* s, int ci, int ui) {
+    City* c = &s->cities[ci];
+    if (city_can_add_unit(c)) { c->unit_ids[c->num_units++] = (int16_t)ui; }
+    s->units[ui].city = (int8_t)ci;
+}
+static inline void city_remove_unit(PolyState* s, int ci, int ui) {
+    City* c = &s->cities[ci];
+    for (int i = 0; i < c->num_units; i++) {
+        if (c->unit_ids[i] == ui) {
+            for (int j = i; j < c->num_units - 1; j++) c->unit_ids[j] = c->unit_ids[j + 1];
+            c->num_units--;
+            return;
+        }
+    }
+}
+
+// Temple total points at its current level (Temple.getPoints)
+static inline int temple_points_total(int level) {
+    int p = 0;
+    for (int i = 0; i < level; i++) p += TEMPLE_POINTS[i];
+    return p;
+}
+
+// City.applyBonus — adjacency production/population pairs. Quirks kept:
+//   - base placement adds its own bonus as population to its own city
+//   - the paired building's bonus is credited to the PAIRED building's city
+//   - an adjacent matching building in an ENEMY city aborts the whole scan
+static inline void city_apply_bonus(PolyState* s, int ci, int tile, BuildingType type,
+                                    bool is_population, bool only_matching, int multiplier) {
+    City* c = &s->cities[ci];
+    int player = c->owner;
+    bool is_base = BUILDING_INFO[type].is_base;
+    if (is_base && is_population && !only_matching)
+        city_add_population(s, ci, multiplier * BUILDING_INFO[type].bonus);
+
+    int n = s->size, x0 = tile % n, y0 = tile / n;
+    BuildingType match = building_pair(type);
+    for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        int x = x0 + dx, y = y0 + dy;
+        if (!in_bounds(s, x, y)) continue;
+        int t = tile_idx(s, x, y);
+        if (s->building[t] != match || match == BUILDING_NONE) continue;
+        int oc = s->city_at[t];
+        int add_to = ci;
+        if (oc != ci) {
+            if (oc < 0 || s->cities[oc].owner != player) return;  // Java: early abort
+            add_to = oc;
+        }
+        int bonus = is_base ? BUILDING_INFO[match].bonus : BUILDING_INFO[type].bonus;
+        if (is_population) city_add_population(s, add_to, bonus * multiplier);
+        else city_add_production(&s->cities[add_to], bonus * multiplier);
+    }
+}
+
+// City.updateBuildingEffects. `tile` holds the building; temple level read from planes.
+// Quirk kept from City.java:180: on REMOVAL of a temple its accumulated points are
+// ADDED (not subtracted) to the tribe score.
+static inline void city_building_effects(PolyState* s, int ci, int tile, BuildingType type,
+                                         bool negative, bool only_matching) {
+    int mult = negative ? -1 : 1;
+    switch (type) {
+        case BUILDING_FARM: case BUILDING_LUMBER_HUT: case BUILDING_MINE:
+        case BUILDING_WINDMILL: case BUILDING_SAWMILL: case BUILDING_FORGE:
+            city_apply_bonus(s, ci, tile, type, true, only_matching, mult);
+            break;
+        case BUILDING_PORT:
+            if (!only_matching) city_add_population(s, ci, PORT_BONUS_POP * mult);
+            city_apply_bonus(s, ci, tile, type, false, only_matching, mult);
+            break;
+        case BUILDING_CUSTOMS_HOUSE:
+            city_apply_bonus(s, ci, tile, type, false, only_matching, mult);
+            break;
+        case BUILDING_TEMPLE: case BUILDING_WATER_TEMPLE:
+        case BUILDING_MOUNTAIN_TEMPLE: case BUILDING_FOREST_TEMPLE: {
+            if (!only_matching)
+                city_add_population(s, ci, BUILDING_INFO[type].bonus * mult);
+            int score_diff = negative ? temple_points_total(s->temple_level[tile])
+                                      : TEMPLE_POINTS[0];
+            s->players[s->cities[ci].owner].score += score_diff;
+            break;
+        }
+        default:  // monuments
+            if (!only_matching)
+                city_add_population(s, ci, BUILDING_INFO[type].bonus * mult);
+            s->players[s->cities[ci].owner].score += MONUMENT_POINTS * mult;
+            break;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Visibility (Tribe.clearView). v1 skips meetTribe / EYE_OF_GOD (partial-obs
+// only mechanics; see docs/PLAN.md scope). Returns true if a road or water
+// tile was revealed (triggers a trade-network recompute in Java).
+// ---------------------------------------------------------------------------
+static inline bool poly_clear_view(PolyState* s, int player, int x0, int y0, int range) {
+    Player* p = &s->players[player];
+    bool net_update = false;
+    for (int dy = -range; dy <= range; dy++) for (int dx = -range; dx <= range; dx++) {
+        int x = x0 + dx, y = y0 + dy;
+        if (!in_bounds(s, x, y)) continue;
+        int t = tile_idx(s, x, y);
+        if (!obs_get(p, t)) {
+            obs_set(p, t);
+            p->score += CLEAR_VIEW_POINTS;
+            if (poly_is_road(s, t) || terrain_is_water((Terrain)s->terrain[t]))
+                net_update = true;
+        }
+    }
+    return net_update;
+}
+
+// ---------------------------------------------------------------------------
+// Trade network (TradeNetwork.java + Tribe.updateNetwork)
+// ---------------------------------------------------------------------------
+static inline bool player_controls_city(const PolyState* s, int player, int ci) {
+    return ci >= 0 && s->cities[ci].owner == player;
+}
+static inline bool player_controls_capital(const PolyState* s, int player) {
+    return player_controls_city(s, player, s->players[player].capital);
+}
+
+// BFS over navigable water: true if two ports are <= PORT_TRADE_DISTANCE apart.
+static inline bool poly_ports_linked(const PolyState* s, const uint8_t* navigable,
+                                     int from, int to) {
+    int n = s->size, ntiles = n * n;
+    int8_t dist[MAX_TILES];
+    int16_t queue[MAX_TILES];
+    for (int i = 0; i < ntiles; i++) dist[i] = -1;
+    int head = 0, tail = 0;
+    dist[from] = 0; queue[tail++] = (int16_t)from;
+    while (head < tail) {
+        int cur = queue[head++];
+        if (cur == to) return true;
+        if (dist[cur] >= PORT_TRADE_DISTANCE) continue;
+        int cx = cur % n, cy = cur / n;
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            int x = cx + dx, y = cy + dy;
+            if (!in_bounds(s, x, y)) continue;
+            int t = tile_idx(s, x, y);
+            if (!navigable[t] || dist[t] >= 0) continue;
+            dist[t] = (int8_t)(dist[cur] + 1);
+            queue[tail++] = (int16_t)t;
+        }
+    }
+    return false;
+}
+
+// computeTradeNetworkTribe + Tribe.updateNetwork for one player.
+// players_turn: newly connected non-capital cities gain +1 pop only on the
+// owner's turn; capital gain/loss and disconnect penalties apply always.
+static inline void poly_network_update_player(PolyState* s, int player, bool players_turn) {
+    Player* p = &s->players[player];
+    int n = s->size, ntiles = n * n;
+
+    uint64_t was_connected = p->connected_cities;
+    uint64_t now_connected = 0;
+    int added = 0, lost = 0;
+
+    if (player_controls_capital(s, player)) {
+        // connectivity graph: own city centers & ports + own/neutral roads (all net tiles)
+        uint8_t connected[MAX_TILES], navigable[MAX_TILES];
+        int16_t ports[MAX_CITIES * 4]; int num_ports = 0;
+        for (int t = 0; t < ntiles; t++) {
+            connected[t] = 0; navigable[t] = 0;
+            int ci = s->city_at[t];
+            bool my_city = player_controls_city(s, player, ci);
+            bool not_enemy = my_city || ci == -1;
+            Terrain ter = (Terrain)s->terrain[t];
+            bool port = s->building[t] == BUILDING_PORT;
+            if (my_city && (ter == TERRAIN_CITY || port)) {
+                connected[t] = s->net_tile[t];
+                if (port && num_ports < (int)(sizeof(ports) / sizeof(ports[0])))
+                    ports[num_ports++] = (int16_t)t;
+            } else if (not_enemy && poly_is_road(s, t)) {
+                connected[t] = s->net_tile[t];
+            }
+            if (terrain_is_water(ter) && obs_get(p, t) && not_enemy) navigable[t] = 1;
+        }
+
+        // port jump links (bidirectional)
+        uint8_t linked[MAX_CITIES * 4][MAX_CITIES * 4 / 8];  // small bitset matrix
+        memset(linked, 0, sizeof(linked));
+        for (int i = 0; i < num_ports - 1; i++)
+            for (int j = i + 1; j < num_ports; j++)
+                if (poly_ports_linked(s, navigable, ports[i], ports[j])) {
+                    linked[i][j >> 3] |= (uint8_t)(1u << (j & 7));
+                    linked[j][i >> 3] |= (uint8_t)(1u << (i & 7));
+                }
+
+        // BFS from capital over connected tiles + jump links
+        uint8_t seen[MAX_TILES]; int16_t queue[MAX_TILES + 64];
+        memset(seen, 0, (size_t)ntiles);
+        int head = 0, tail = 0;
+        City* cap = &s->cities[p->capital];
+        int cap_t = tile_idx(s, cap->x, cap->y);
+        if (connected[cap_t]) { seen[cap_t] = 1; queue[tail++] = (int16_t)cap_t; }
+        while (head < tail) {
+            int cur = queue[head++];
+            int cx = cur % n, cy = cur / n;
+            for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                int x = cx + dx, y = cy + dy;
+                if (!in_bounds(s, x, y)) continue;
+                int t = tile_idx(s, x, y);
+                if (connected[t] && !seen[t]) { seen[t] = 1; queue[tail++] = (int16_t)t; }
+            }
+            for (int i = 0; i < num_ports; i++) {
+                if (ports[i] != cur) continue;
+                for (int j = 0; j < num_ports; j++)
+                    if ((linked[i][j >> 3] >> (j & 7)) & 1u) {
+                        int t = ports[j];
+                        if (connected[t] && !seen[t]) { seen[t] = 1; queue[tail++] = (int16_t)t; }
+                    }
+            }
+        }
+
+        // connected cities = own non-capital cities whose center is reached
+        for (int k = 0; k < p->num_cities; k++) {
+            int ci = p->city_list[k];
+            if (ci == p->capital) continue;
+            City* c = &s->cities[ci];
+            if (seen[tile_idx(s, c->x, c->y)]) now_connected |= 1ull << ci;
+        }
+
+        for (int ci = 0; ci < s->num_cities; ci++) {
+            uint64_t bit = 1ull << ci;
+            bool was = (was_connected & bit) != 0, is = (now_connected & bit) != 0;
+            // includes formerly-connected cities we no longer own (bit clears);
+            // score attribution follows THIS player, as in Java dropCityFromNetwork
+            if (was && !is) { city_add_population_for(s, ci, -1, player); lost++; }
+            else if (!was && is) { added++; }
+        }
+        p->connected_cities = now_connected;
+        city_add_population_for(s, p->capital, added - lost, player);  // capital gain/loss
+
+        int conn_count = 0;
+        for (uint64_t b = now_connected; b; b >>= 1) conn_count += (int)(b & 1);
+        if (conn_count >= GRAND_BAZAR_CITIES &&
+            p->monuments[BUILDING_GRAND_BAZAR - 12] == MONUMENT_UNAVAILABLE)
+            p->monuments[BUILDING_GRAND_BAZAR - 12] = MONUMENT_AVAILABLE;
+
+        if (players_turn) {
+            for (int ci = 0; ci < s->num_cities; ci++) {
+                uint64_t bit = 1ull << ci;
+                if (!(was_connected & bit) && (now_connected & bit))
+                    city_add_population_for(s, ci, 1, player);
+            }
+        }
+    } else {
+        // no capital: everything disconnects (Tribe.updateNetwork first branch —
+        // note Java does NOT apply the -1 pop penalty on this path)
+        p->connected_cities = 0;
+    }
+}
+
+// setTradeNetwork: flip a network tile and recompute for every player.
+static inline void poly_set_net_tile(PolyState* s, int t, bool value) {
+    s->net_tile[t] = value ? 1 : 0;
+    for (int pl = 0; pl < s->num_players; pl++)
+        poly_network_update_player(s, pl, pl == s->active_player);
+}
+
+// ---------------------------------------------------------------------------
+// Unit add/remove/move (Board.addUnit/removeUnitFromBoard/moveUnit)
+// ---------------------------------------------------------------------------
+static inline int poly_new_unit(PolyState* s, UnitType type, int owner, int x, int y) {
+    int i;
+    for (i = 0; i < s->num_units; i++) if (s->units[i].type == UNIT_NONE) break;
+    if (i == s->num_units) s->num_units++;
+    Unit* u = &s->units[i];
+    memset(u, 0, sizeof(*u));
+    u->type = (int8_t)type; u->owner = (int8_t)owner; u->carried = UNIT_NONE;
+    u->x = (int8_t)x; u->y = (int8_t)y;
+    u->max_hp = UNIT_STATS[type].max_hp; u->hp = u->max_hp;
+    u->status = STATUS_FINISHED;    // Java constructor default
+    u->city = -1;
+    s->unit_at[tile_idx(s, x, y)] = (int16_t)i;
+    return i;
+}
+
+static inline void poly_remove_unit(PolyState* s, int ui) {
+    Unit* u = &s->units[ui];
+    if (u->city >= 0) city_remove_unit(s, u->city, ui);
+    s->unit_at[tile_idx(s, u->x, u->y)] = -1;
+    u->type = UNIT_NONE;
+}
+
+// Board.moveUnit: relocate + clear view (radius 1; +1 on mountain or battleship)
+// + network recompute if new roads/water revealed.
+static inline void poly_move_unit(PolyState* s, int ui, int x, int y) {
+    Unit* u = &s->units[ui];
+    s->unit_at[tile_idx(s, u->x, u->y)] = -1;
+    s->unit_at[tile_idx(s, x, y)] = (int16_t)ui;
+    u->x = (int8_t)x; u->y = (int8_t)y;
+    int range = 1;
+    if (s->terrain[tile_idx(s, x, y)] == TERRAIN_MOUNTAIN || u->type == UNIT_BATTLESHIP) range++;
+    if (poly_clear_view(s, u->owner, x, y, range))
+        poly_network_update_player(s, u->owner, u->owner == s->active_player);
+}
+
+// Board.embark/disembark — Java replaces the actor; we morph in place,
+// preserving HP/kills/veteran/city and stashing the land type in `carried`.
+static inline void poly_embark(PolyState* s, int ui, int x, int y) {
+    Unit* u = &s->units[ui];
+    s->unit_at[tile_idx(s, u->x, u->y)] = -1;
+    u->carried = u->type;
+    u->type = UNIT_BOAT;
+    u->x = (int8_t)x; u->y = (int8_t)y;
+    s->unit_at[tile_idx(s, x, y)] = (int16_t)ui;
+}
+static inline void poly_disembark(PolyState* s, int ui, int x, int y) {
+    Unit* u = &s->units[ui];
+    s->unit_at[tile_idx(s, u->x, u->y)] = -1;
+    u->type = u->carried >= 0 ? u->carried : UNIT_WARRIOR;  // Java fallback
+    u->carried = UNIT_NONE;
+    u->x = (int8_t)x; u->y = (int8_t)y;
+    s->unit_at[tile_idx(s, x, y)] = (int16_t)ui;
+}
+
+// ---------------------------------------------------------------------------
+// Push (Board.pushUnit / tryPush). Push-order arrays verbatim from
+// Board.java:295-296 (S,W,N,E,SW,NW,NE,NE in their axis convention).
 // ---------------------------------------------------------------------------
 static const int8_t PUSH_DX[8] = {0, -1, 0, 1, -1, -1, 1, 1};
 static const int8_t PUSH_DY[8] = {1, 0, -1, 0, 1, -1, -1, 1};
+
+static inline bool poly_try_push(PolyState* s, int ui, int x, int y) {
+    Unit* u = &s->units[ui];
+    int t = tile_idx(s, x, y);
+    if (s->unit_at[t] >= 0) return false;
+    Terrain ter = (Terrain)s->terrain[t];
+    if (ter == TERRAIN_MOUNTAIN) {
+        if (!tech_researched(&s->players[u->owner], TECH_CLIMBING)) return false;
+        poly_move_unit(s, ui, x, y);
+        return true;
+    }
+    if (terrain_is_water(ter)) {
+        if (UNIT_STATS[u->type].water) return true;   // Java quirk: "pushed" without moving
+        if (s->building[t] == BUILDING_PORT) {
+            int ci = s->city_at[t];
+            if (ci >= 0 && s->cities[ci].owner == u->owner) { poly_embark(s, ui, x, y); return true; }
+        }
+        return false;
+    }
+    poly_move_unit(s, ui, x, y);
+    return true;
+}
+
+// Returns false if the unit could not be pushed anywhere (Java: it vanishes —
+// caller must then remove it). Sets PUSHED status regardless, as in Java.
+static inline bool poly_push_unit(PolyState* s, int ui) {
+    Unit* u = &s->units[ui];
+    int sx = u->x, sy = u->y;
+    bool pushed = false;
+    for (int i = 0; i < 8 && !pushed; i++) {
+        int x = sx + PUSH_DX[i], y = sy + PUSH_DY[i];
+        if (in_bounds(s, x, y)) pushed = poly_try_push(s, ui, x, y);
+    }
+    u->status = STATUS_PUSHED;
+    return pushed;
+}
+
+// ---------------------------------------------------------------------------
+// Capture bookkeeping (Board.capture + moveOne/moveAll/moveLast + Tribe
+// capturedCity/lostCity/manageLoss). Java's seeded Collections.shuffle over
+// the tribe's non-capital city list is reproduced (fisher-yates, same order).
+// ---------------------------------------------------------------------------
+static inline void poly_shuffle_cities(uint32_t* rng, int8_t* a, int n) {
+    for (int i = n - 1; i >= 1; i--) {
+        int j = poly_rand_int(rng, i + 1);
+        int8_t tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+}
+
+static inline void poly_move_last_unit(PolyState* s, int from_ci, int to_ci) {
+    City* from = &s->cities[from_ci];
+    if (from->num_units == 0) return;
+    int ui = from->unit_ids[--from->num_units];
+    City* to = &s->cities[to_ci];
+    if (to->num_units < CITY_MAX_UNITS) to->unit_ids[to->num_units++] = (int16_t)ui;
+    s->units[ui].city = (int8_t)to_ci;
+}
+
+// Board.moveOneToNewCity: dest city inherits one unit-slot association,
+// preferring the capital as donor, else a random owned city with units.
+static inline void poly_move_one_to_new_city(PolyState* s, int dest_ci, int player) {
+    Player* p = &s->players[player];
+    int8_t others[MAX_CITIES]; int n_others = 0;
+    for (int k = 0; k < p->num_cities; k++)
+        if (p->city_list[k] != p->capital) others[n_others++] = p->city_list[k];
+
+    if (player_controls_capital(s, player) && s->cities[p->capital].num_units > 0) {
+        poly_move_last_unit(s, p->capital, dest_ci);
+        return;
+    }
+    poly_shuffle_cities(&s->rng, others, n_others);
+    for (int k = 0; k < n_others; k++) {
+        // Java iterates the shuffled list without excluding dest; a self-move
+        // is a no-op that still terminates the search — keep that behavior.
+        if (s->cities[others[k]].num_units > 0) {
+            poly_move_last_unit(s, others[k], dest_ci);
+            return;
+        }
+    }
+}
+
+// Board.moveAllFromCity: units of a lost city are re-homed: capital first,
+// then random own cities, remainder become tribe-owned "extra" units.
+static inline void poly_move_all_from_city(PolyState* s, int from_ci, int player) {
+    Player* p = &s->players[player];
+    City* from = &s->cities[from_ci];
+    if (player_controls_capital(s, player)) {
+        while (city_can_add_unit(&s->cities[p->capital]) && from->num_units > 0)
+            poly_move_last_unit(s, from_ci, p->capital);
+    }
+    if (from->num_units > 0) {
+        int8_t others[MAX_CITIES]; int n_others = 0;
+        for (int k = 0; k < p->num_cities; k++)
+            if (p->city_list[k] != p->capital) others[n_others++] = p->city_list[k];
+        poly_shuffle_cities(&s->rng, others, n_others);
+        for (int k = 0; k < n_others && from->num_units > 0; k++) {
+            while (city_can_add_unit(&s->cities[others[k]]) && from->num_units > 0)
+                poly_move_last_unit(s, from_ci, others[k]);
+        }
+        while (from->num_units > 0) {           // remainder: tribe-owned
+            int ui = from->unit_ids[--from->num_units];
+            s->units[ui].city = -1;
+        }
+    }
+}
+
+static inline void player_add_city(PolyState* s, int player, int ci) {
+    Player* p = &s->players[player];
+    p->city_list[p->num_cities++] = (int8_t)ci;
+    s->cities[ci].owner = (int8_t)player;
+}
+static inline void player_remove_city(PolyState* s, int player, int ci) {
+    Player* p = &s->players[player];
+    for (int k = 0; k < p->num_cities; k++) {
+        if (p->city_list[k] == ci) {
+            for (int j = k; j < p->num_cities - 1; j++) p->city_list[j] = p->city_list[j + 1];
+            p->num_cities--;
+            return;
+        }
+    }
+}
+
+// Board.assignCityTiles: claim unowned tiles in the city's bound radius.
+static inline void poly_assign_city_tiles(PolyState* s, int ci, int radius) {
+    City* c = &s->cities[ci];
+    for (int dy = -radius; dy <= radius; dy++) for (int dx = -radius; dx <= radius; dx++) {
+        int x = c->x + dx, y = c->y + dy;
+        if (!in_bounds(s, x, y)) continue;
+        int t = tile_idx(s, x, y);
+        if (s->city_at[t] == -1) {
+            s->city_at[t] = (int8_t)ci;
+            s->players[c->owner].score += CITY_BORDER_POINTS;
+            c->points_worth = (int16_t)(c->points_worth + CITY_BORDER_POINTS);
+        }
+    }
+}
+
+// Tribe.manageLoss: player is out; all their units are removed from the board.
+static inline void poly_manage_loss(PolyState* s, int player) {
+    s->players[player].result = RESULT_LOSS;
+    for (int ui = 0; ui < s->num_units; ui++)
+        if (s->units[ui].type != UNIT_NONE && s->units[ui].owner == player)
+            poly_remove_unit(s, ui);
+}
+
+// Board.capture: village -> new city, or enemy city -> ownership transfer.
+// Returns the captured/created city index, or -1 on failure.
+static inline int poly_capture(PolyState* s, int player, int x, int y) {
+    int t = tile_idx(s, x, y);
+    Terrain ter = (Terrain)s->terrain[t];
+
+    if (ter == TERRAIN_VILLAGE) {
+        int ci = s->num_cities++;
+        City* c = &s->cities[ci];
+        memset(c, 0, sizeof(*c));
+        c->x = (int8_t)x; c->y = (int8_t)y;
+        c->level = 1; c->population_need = 2; c->bound = 1; c->owner = -1;
+        // Java order: addCityToTribe (addCity, clearView, setTradeNetwork —
+        // note the FIRST network recompute runs while the tile is still
+        // VILLAGE terrain and unowned) → assignCityTiles → terrain=CITY →
+        // moveOneToNewCity → centre points → setTradeNetwork AGAIN.
+        player_add_city(s, player, ci);
+        poly_clear_view(s, player, x, y, NEW_CITY_CLEAR_RANGE);  // return discarded, as in Java
+        poly_set_net_tile(s, t, true);                            // recompute #1
+        poly_assign_city_tiles(s, ci, c->bound);
+        s->terrain[t] = TERRAIN_CITY;
+        poly_move_one_to_new_city(s, ci, player);
+        s->players[player].score += CITY_CENTRE_POINTS;
+        poly_set_net_tile(s, t, true);                            // recompute #2
+        return ci;
+    }
+
+    if (ter == TERRAIN_CITY) {
+        int ci = s->city_at[t];
+        City* c = &s->cities[ci];
+        int prev_owner = c->owner;
+
+        // Tribe.capturedCity: transfer + building effects for the new owner
+        player_add_city(s, player, ci);      // sets c->owner = player
+        player_remove_city(s, prev_owner, ci);
+        for (int bt = 0; bt < s->size * s->size; bt++)
+            if (s->city_at[bt] == ci && s->building[bt] != BUILDING_NONE)
+                city_building_effects(s, ci, bt, (BuildingType)s->building[bt], false, true);
+        // Tribe.lostCity: base/port building effects for the previous owner —
+        // note owner already flipped in Java too (capturedCity runs first)
+        for (int bt = 0; bt < s->size * s->size; bt++)
+            if (s->city_at[bt] == ci && s->building[bt] != BUILDING_NONE) {
+                BuildingType b = (BuildingType)s->building[bt];
+                if (BUILDING_INFO[b].is_base || b == BUILDING_PORT)
+                    city_building_effects(s, ci, bt, b, true, true);
+            }
+
+        poly_move_all_from_city(s, ci, prev_owner);
+        poly_move_one_to_new_city(s, ci, player);
+
+        if (s->players[prev_owner].num_cities == 0)
+            poly_manage_loss(s, prev_owner);
+
+        poly_set_net_tile(s, t, true);
+        return ci;
+    }
+    return -1;
+}
 
 // ---------------------------------------------------------------------------
 // Engine API (implemented across M1; declarations fixed now so binding.c,
