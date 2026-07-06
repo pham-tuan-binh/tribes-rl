@@ -177,6 +177,245 @@ static inline int city_production(const City* c) {
 }
 
 // ---------------------------------------------------------------------------
+// Unit turn-status FSM (exact port of Unit.canTransitionTo / transitionToStatus,
+// Unit.java:96-188). Quirks preserved:
+//   - FINISHED is reachable from any non-FINISHED state; FINISHED is absorbing.
+//   - SUPERUNIT validates like the Dash group but ANY transition lands FINISHED.
+//   - RIDER "Escape": FRESH->ATTACKED->MOVED_AND_ATTACKED->(move)->FINISHED,
+//     i.e. attack + up to two moves, or move+attack+move.
+//   - KNIGHT "Persist": attacks land FINISHED, but addKill() force-sets ATTACKED
+//     (bypassing the FSM) from which another ATTACKED transition is legal.
+// ---------------------------------------------------------------------------
+
+static inline bool unit_can_transition(UnitType type, TurnStatus status, TurnStatus to) {
+    if (status == STATUS_FINISHED) return false;
+    if (to == STATUS_FINISHED) return true;
+    switch (type) {
+        case UNIT_MIND_BENDER:
+        case UNIT_CATAPULT:
+        case UNIT_DEFENDER:   // move OR attack, once
+            return (to == STATUS_MOVED || to == STATUS_ATTACKED) && status == STATUS_FRESH;
+        case UNIT_ARCHER:
+        case UNIT_BATTLESHIP:
+        case UNIT_BOAT:
+        case UNIT_SHIP:
+        case UNIT_WARRIOR:
+        case UNIT_SWORDMAN:
+        case UNIT_SUPERUNIT:  // Dash
+            if (to == STATUS_MOVED && status == STATUS_FRESH) return true;
+            if (to == STATUS_ATTACKED && (status == STATUS_FRESH || status == STATUS_MOVED)) return true;
+            return false;
+        case UNIT_RIDER:      // Escape
+            if (to == STATUS_MOVED && (status == STATUS_FRESH || status == STATUS_ATTACKED ||
+                                       status == STATUS_MOVED_AND_ATTACKED)) return true;
+            if (to == STATUS_ATTACKED && (status == STATUS_FRESH || status == STATUS_MOVED)) return true;
+            return false;
+        case UNIT_KNIGHT:     // Persist
+            if (to == STATUS_MOVED && status == STATUS_FRESH) return true;
+            if (to == STATUS_ATTACKED && (status == STATUS_FRESH || status == STATUS_MOVED ||
+                                          status == STATUS_ATTACKED)) return true;
+            return false;
+        default:
+            return false;
+    }
+}
+
+// Applies the transition (no-op if illegal, mirroring Java).
+static inline void unit_transition(Unit* u, TurnStatus to) {
+    if (!unit_can_transition((UnitType)u->type, (TurnStatus)u->status, to)) return;
+    if (to == STATUS_FINISHED) { u->status = STATUS_FINISHED; return; }
+    TurnStatus s = (TurnStatus)u->status;
+    switch ((UnitType)u->type) {
+        case UNIT_MIND_BENDER:
+        case UNIT_CATAPULT:
+        case UNIT_DEFENDER:
+        case UNIT_SUPERUNIT:
+            u->status = STATUS_FINISHED;
+            break;
+        case UNIT_ARCHER:
+        case UNIT_BATTLESHIP:
+        case UNIT_BOAT:
+        case UNIT_SHIP:
+        case UNIT_WARRIOR:
+        case UNIT_SWORDMAN:
+            if (to == STATUS_MOVED && s == STATUS_FRESH) u->status = STATUS_MOVED;
+            if (to == STATUS_ATTACKED && (s == STATUS_FRESH || s == STATUS_MOVED)) u->status = STATUS_FINISHED;
+            break;
+        case UNIT_RIDER:
+            if (to == STATUS_MOVED && s == STATUS_FRESH) u->status = STATUS_MOVED;
+            else if (to == STATUS_MOVED && s == STATUS_ATTACKED) u->status = STATUS_MOVED_AND_ATTACKED;
+            else if (to == STATUS_MOVED && s == STATUS_MOVED_AND_ATTACKED) u->status = STATUS_FINISHED;
+            else if (to == STATUS_ATTACKED && s == STATUS_FRESH) u->status = STATUS_ATTACKED;
+            else if (to == STATUS_ATTACKED && s == STATUS_MOVED) u->status = STATUS_MOVED_AND_ATTACKED;
+            break;
+        case UNIT_KNIGHT:
+            if (to == STATUS_MOVED && s == STATUS_FRESH) u->status = STATUS_MOVED;
+            else if (to == STATUS_ATTACKED) u->status = STATUS_FINISHED;  // from FRESH/MOVED/ATTACKED
+            break;
+        default:
+            break;
+    }
+}
+
+// Unit.addKill — Knight Persist: a kill re-arms the knight's attack.
+static inline void unit_add_kill(Unit* u) {
+    u->kills++;
+    if (u->type == UNIT_KNIGHT) u->status = STATUS_ATTACKED;
+}
+
+static inline bool unit_can_attack(const Unit* u) {
+    return unit_can_transition((UnitType)u->type, (TurnStatus)u->status, STATUS_ATTACKED);
+}
+static inline bool unit_can_move(const Unit* u) {
+    return unit_can_transition((UnitType)u->type, (TurnStatus)u->status, STATUS_MOVED);
+}
+
+// ---------------------------------------------------------------------------
+// Fog-of-war bitset helpers
+// ---------------------------------------------------------------------------
+static inline bool obs_get(const Player* p, int t) { return (p->obs[t >> 3] >> (t & 7)) & 1u; }
+static inline void obs_set(Player* p, int t) { p->obs[t >> 3] |= (uint8_t)(1u << (t & 7)); }
+
+// Board.traversable — tech-gated terrain entry.
+static inline bool poly_traversable(const PolyState* s, int x, int y, int player) {
+    Terrain t = (Terrain)s->terrain[tile_idx(s, x, y)];
+    const Player* p = &s->players[player];
+    if (t == TERRAIN_MOUNTAIN && !tech_researched(p, TECH_CLIMBING)) return false;
+    if (t == TERRAIN_SHALLOW_WATER && !tech_researched(p, TECH_SAILING)) return false;
+    if (t == TERRAIN_DEEP_WATER && !tech_researched(p, TECH_NAVIGATION)) return false;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Movement (exact port of StepMove.getNeighbours + Pathfinder Dijkstra).
+// Costs are doubles, as in Java: road-halving creates fractional costs that do
+// not stay on half-steps (e.g. remaining 1.5 halved = 0.75).
+// Quirk preserved from StepMove.java:136: the road-discount recheck reads the
+// SOURCE tile's city control, not the destination's.
+// poly_reachable() fills dest_ok[t]=1 for every legal Move destination
+// (reachable, empty, != start) and returns their count.
+// ---------------------------------------------------------------------------
+
+static inline bool poly_is_road_like(const PolyState* s, int t) {
+    return s->road[t] || s->terrain[t] == TERRAIN_CITY;
+}
+// "friendly or neutral" road/city tile from the mover's perspective
+static inline bool poly_road_usable(const PolyState* s, int t, int player) {
+    int8_t c = s->city_at[t];
+    return c == -1 || s->cities[c].owner == player;
+}
+
+static inline int poly_reachable(const PolyState* s, int unit_idx, uint8_t* dest_ok) {
+    const Unit* u = &s->units[unit_idx];
+    int n = s->size, ntiles = n * n;
+    int player = u->owner;
+    double mov = UNIT_STATS[u->type].mov;
+    bool is_water = UNIT_STATS[u->type].water;
+
+    double cost[MAX_TILES];
+    uint8_t done[MAX_TILES];
+    for (int i = 0; i < ntiles; i++) { cost[i] = 1e18; done[i] = 0; dest_ok[i] = 0; }
+    int start = tile_idx(s, u->x, u->y);
+    cost[start] = 0.0;
+
+    for (;;) {
+        // extract-min (boards are <=576 tiles; O(V^2) is fine for v1)
+        int cur = -1; double best = 1e18;
+        for (int i = 0; i < ntiles; i++)
+            if (!done[i] && cost[i] < best) { best = cost[i]; cur = i; }
+        if (cur < 0) break;
+        done[cur] = 1;
+
+        double cost_from = cost[cur];
+        if (cost_from == mov) continue;              // StepMove: movement exhausted
+        int cx = cur % n, cy = cur / n;
+
+        // source on friendly/neutral road or city? (road discount precondition)
+        bool on_road = poly_is_road_like(s, cur) && poly_road_usable(s, cur, player);
+
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            int x = cx + dx, y = cy + dy;
+            if (!in_bounds(s, x, y)) continue;
+            int t = tile_idx(s, x, y);
+            Terrain terrain = (Terrain)s->terrain[t];
+
+            // can't path through enemy units
+            int16_t other = s->unit_at[t];
+            if (other >= 0 && s->units[other].owner != player) continue;
+            // can't move into undiscovered tiles
+            if (!obs_get(&s->players[player], t)) continue;
+            // tech-gated terrain
+            if (!poly_traversable(s, x, y, player)) continue;
+            // mind benders can't enter enemy city tiles
+            if (u->type == UNIT_MIND_BENDER && terrain == TERRAIN_CITY) {
+                int8_t c = s->city_at[t];
+                if (c >= 0 && s->cities[c].owner != player) continue;
+            }
+
+            // zone of control: enemy unit adjacent to destination
+            bool zoc = false;
+            for (int ay = -1; ay <= 1 && !zoc; ay++) for (int ax = -1; ax <= 1; ax++) {
+                if (!ax && !ay) continue;
+                int zx = x + ax, zy = y + ay;
+                if (!in_bounds(s, zx, zy)) continue;
+                int16_t zu = s->unit_at[tile_idx(s, zx, zy)];
+                if (zu >= 0 && s->units[zu].owner != player) { zoc = true; break; }
+            }
+
+            double remaining = cost_from < mov ? mov - cost_from : mov;
+            double step;
+            if (is_water) {
+                step = terrain_is_water(terrain) || terrain == TERRAIN_FOG ? 1.0
+                     : remaining;                                   // disembark
+            } else {
+                if (terrain_is_water(terrain)) {
+                    if (s->building[t] != BUILDING_PORT) continue;  // embark only via port
+                    step = remaining;
+                } else if (terrain == TERRAIN_FOREST || terrain == TERRAIN_MOUNTAIN) {
+                    step = remaining;
+                } else {
+                    step = 1.0;
+                }
+                // road discount (ground only) — source-city recheck quirk kept
+                if (on_road && poly_is_road_like(s, t) && poly_road_usable(s, cur, player)) {
+                    step = step / 2.0 < 0.5 ? 0.5 : step / 2.0;
+                }
+            }
+
+            bool allowed;
+            if (zoc) {                                  // ZoC consumes all remaining movement
+                step = remaining;
+                allowed = cost_from + step <= mov;
+            } else {                                    // Math.floor(costFrom+stepCost) <= MOV
+                allowed = (double)(int64_t)(cost_from + step) <= mov;
+            }
+            if (!allowed) continue;
+
+            double total = cost_from + step;
+            if (total < cost[t]) cost[t] = total;
+        }
+    }
+
+    // legal destinations: reached, not the start tile, empty of any unit
+    int count = 0;
+    for (int t = 0; t < ntiles; t++) {
+        if (t == start || cost[t] >= 1e18) continue;
+        if (s->unit_at[t] >= 0) continue;
+        dest_ok[t] = 1;
+        count++;
+    }
+    return count;
+}
+
+// ---------------------------------------------------------------------------
+// Push (Board.pushUnit order: S,W,N,E,SW,NW,NE,NE — arrays verbatim
+// from Board.java:295-296; coordinates are (x=col, y=row) in our layout)
+// ---------------------------------------------------------------------------
+static const int8_t PUSH_DX[8] = {0, -1, 0, 1, -1, -1, 1, 1};
+static const int8_t PUSH_DY[8] = {1, 0, -1, 0, 1, -1, -1, 1};
+
+// ---------------------------------------------------------------------------
 // Engine API (implemented across M1; declarations fixed now so binding.c,
 // tests and the WASM bridge can build against them)
 // ---------------------------------------------------------------------------
