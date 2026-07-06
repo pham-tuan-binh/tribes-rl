@@ -5,7 +5,7 @@ ASAN_FLAGS = -std=c11 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror
 BUILD := build
 TEST_SRCS := $(wildcard core/tests/test_*.c)
 TESTS := $(patsubst core/tests/%.c,$(BUILD)/%,$(TEST_SRCS))
-HDRS := core/polytopia.h core/constants.h core/actions.h
+HDRS := core/polytopia.h core/constants.h core/actions.h core/game.h
 
 .PHONY: test asan clean
 
