@@ -129,6 +129,7 @@ typedef struct {
     int n_legal;
 
     float shaping;           // score-delta shaping coefficient (0 = off)
+    float draw_penalty;      // subtracted from BOTH players on a stall/cap draw
     int fog;                 // partial observability (fog of war)
     int32_t prev_score[ENV_PLAYERS];
     int32_t episode_steps;
@@ -379,6 +380,7 @@ static inline void env_end_episode(PolyEnv* e) {
             *e->reward_ptr[a] += e->game.players[a].result == RESULT_WIN ? 1.0f : -1.0f;
             e->final_result[a] = (int8_t)e->game.players[a].result;
         } else {
+            *e->reward_ptr[a] -= e->draw_penalty;     // stalling hurts both sides
             e->final_result[a] = RESULT_INCOMPLETE;   // draw
         }
         *e->terminal_ptr[a] = 1.0f;

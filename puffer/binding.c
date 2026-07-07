@@ -38,6 +38,9 @@ void my_init(Env* env, Dict* kwargs) {
     env->fog = 1;   // fog of war on by default
     if ((it = dict_get_unsafe(kwargs, "fog")) != NULL)
         env->fog = (int)it->value;
+    env->draw_penalty = 0.5f;
+    if ((it = dict_get_unsafe(kwargs, "draw_penalty")) != NULL)
+        env->draw_penalty = (float)it->value;
 
     // distinct per-env rng streams (envs are created sequentially)
     static uint32_t env_counter = 0;
