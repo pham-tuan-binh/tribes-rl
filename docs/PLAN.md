@@ -121,14 +121,20 @@ Board/actors, mapgen port, legal-action enumeration, `apply_action`, turn machin
 **M3 — Self-play at scale**
 Selfplay pool config, reward-shaping ablation, sweeps (`puffer sweep`), eval ladder + ELO tracking. ✓ when: monotonic ELO curve and clearly super-SimpleAgent play; export weights via puffernet `.bin` and verify C inference matches torch logits.
 
-**M4 — Web game (human-playable)**
-emcc build of core with a small exported C ABI (`init(seed) / legal_mask() / apply(action) / state_view()` + `-sMODULARIZE`); TS + PixiJS isometric renderer; hotseat 2-player. ✓ when: full game playable in browser, mobile-friendly.
+**M4 — The website (one page, two modes)**
+Design brief: *super simple* — the site IS the game, nothing else. Two modes behind one toggle:
+- **Agents**: spectate agent-vs-agent self-play with a speed slider from "watchable" to "as fast as possible" (sim decoupled from render; at max speed, run the WASM sim unthrottled and paint at rAF).
+- **Human**: play against the agent(s) — human input drives the same SELECT/VERB/TARGET machine the agent uses (click actor → click verb → click target).
 
-**M5 — Agent in the browser**
-puffernet compiled into the WASM module, weights fetched as `.bin`, "vs AI" mode with difficulty = checkpoint choice (+ optional sampling temperature). ✓ when: trained agent plays a full game in-browser at <5 ms/decision.
+Stack: emcc build of the core + a small exported C ABI (`init(seed) / legal_mask() / apply(action) / state_view()` + `-sMODULARIZE`); plain TypeScript + Canvas 2D (no framework, no rendering library — flat-shaded tiles; simple, dependency-light code suitable for open-sourcing). Agent inference via puffernet compiled into the same WASM module, weights fetched as `.bin`; difficulty = checkpoint choice / sampling temperature. ✓ when: both modes work in a browser, mobile-friendly, <5 ms/agent decision.
+
+**M5 — Multiplayer (3–4 players)**
+Committed (not stretch): engine already supports MAX_PLAYERS 4; size obs/action space for the max map (masked down), retrain with 3–4 agent slots per env, and extend both website modes to N players. ✓ when: 4-player games watchable and playable in the browser.
 
 **M6 — Stretch**
-Fog-of-war training (engine already tracks `obsGrid`; MinGRU handles memory), 3–4 players + bigger maps (obs/action sized for max, masked down), tribe special units (Tribes lacks ∑∫ỹriȱn̈/Polaris/Cymanti — original content), replay viewer, public leaderboard vs the bot.
+Fog-of-war training (engine already tracks `obsGrid`; MinGRU handles memory), bigger maps, replay viewer, public leaderboard vs the bot. (Special tribes: explicitly out of scope.)
+
+**Open-source posture:** keep the code simple and self-contained for a later public release — C engine with zero deps, no-framework web client, MIT license, this docs/ folder as the documentation.
 
 ## 7. Known risks & mitigations
 
