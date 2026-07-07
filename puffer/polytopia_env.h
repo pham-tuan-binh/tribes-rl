@@ -83,13 +83,23 @@ static inline bool verb_needs_target(int kind) {
 
 typedef enum { PH_SELECT = 0, PH_VERB = 1, PH_TARGET = 2 } EnvPhase;
 
+#define POLY_MAX_BANKS 8
+
 // All-float log struct; vecenv.h sums fields across envs and divides by n.
+// slot_*_score and hist_* follow the chess contract read by pufferl.match and
+// selfplay.py: primary outcome 1.0 win / 0.5 draw / 0.0 loss.
 typedef struct {
     float score;            // final scores summed (avg of both players)
     float episode_length;   // micro-steps per episode
     float ticks;            // game turns per episode
     float p0_winrate;       // domination wins by player 0
     float draw_rate;        // games ended by turn cap / stall (no capitals win)
+    float slot_0_score;     // outcome of agent slot 0 (primary in match/selfplay)
+    float slot_1_score;
+    float hist_score;       // primary outcome sums on opponent-pool (tagged) envs
+    float hist_n;
+    float hist_score_bank[POLY_MAX_BANKS];
+    float hist_n_bank[POLY_MAX_BANKS];
     float n;                // episodes accumulated
 } Log;
 
@@ -388,6 +398,18 @@ static inline void env_end_episode(PolyEnv* e) {
         *e->terminal_ptr[a] = 1.0f;
     }
     e->boundary_reached = 1;   // selfplay pool episode boundary
+
+    // per-slot outcome for match/selfplay (1 win / 0.5 draw / 0 loss)
+    float outcome0 = domination ? (e->game.players[0].result == RESULT_WIN ? 1.0f : 0.0f) : 0.5f;
+    e->log.slot_0_score += outcome0;
+    e->log.slot_1_score += 1.0f - outcome0;
+    if (e->tag > 0 && e->tag <= POLY_MAX_BANKS) {   // opponent-pool env
+        e->log.hist_score += outcome0;
+        e->log.hist_n += 1.0f;
+        e->log.hist_score_bank[e->tag - 1] += outcome0;
+        e->log.hist_n_bank[e->tag - 1] += 1.0f;
+    }
+
     e->log.score += (float)(e->game.players[0].score + e->game.players[1].score) / 2.0f;
     e->log.episode_length += (float)e->episode_steps;
     e->log.ticks += (float)e->game.tick;

@@ -55,4 +55,19 @@ void my_log(Log* log, Dict* out) {
     dict_set(out, "episode_length", log->episode_length);
     dict_set(out, "ticks", log->ticks);
     dict_set(out, "p0_winrate", log->p0_winrate);
+    dict_set(out, "draw_rate", log->draw_rate);
+    dict_set(out, "slot_0_score", log->slot_0_score);
+    dict_set(out, "slot_1_score", log->slot_1_score);
+    dict_set(out, "hist_score", log->hist_score);
+    dict_set(out, "hist_n", log->hist_n);
+    static const char* SB[POLY_MAX_BANKS] = {
+        "hist_score_bank_0", "hist_score_bank_1", "hist_score_bank_2", "hist_score_bank_3",
+        "hist_score_bank_4", "hist_score_bank_5", "hist_score_bank_6", "hist_score_bank_7"};
+    static const char* NB[POLY_MAX_BANKS] = {
+        "hist_n_bank_0", "hist_n_bank_1", "hist_n_bank_2", "hist_n_bank_3",
+        "hist_n_bank_4", "hist_n_bank_5", "hist_n_bank_6", "hist_n_bank_7"};
+    for (int b = 0; b < POLY_MAX_BANKS; b++) {
+        dict_set(out, SB[b], log->hist_score_bank[b]);
+        dict_set(out, NB[b], log->hist_n_bank[b]);
+    }
 }
