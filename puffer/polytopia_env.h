@@ -118,8 +118,10 @@ typedef struct {
 
     // decision-machine state
     int8_t phase;
-    bool sel_is_unit;        // else city (when phase >= VERB)
-    int16_t sel_idx;         // unit or city index
+    // both can be selected at once: a unit standing on its own city center
+    // exposes the union of unit and city verbs (verb slots are disjoint)
+    int16_t sel_unit;        // unit index, -1 = none
+    int16_t sel_city;        // city index, -1 = none
     int16_t sel_tile;
     int8_t pend_kind;        // ActKind for TARGET phase
     int8_t pend_arg;
@@ -184,11 +186,11 @@ static inline bool env_action_of_selected(const PolyEnv* e, const PolyAction* a)
         case ACT_MOVE: case ACT_ATTACK: case ACT_CAPTURE: case ACT_RECOVER:
         case ACT_HEAL_OTHERS: case ACT_CONVERT: case ACT_MAKE_VETERAN:
         case ACT_UPGRADE: case ACT_DISBAND: case ACT_EXAMINE:
-            return e->sel_is_unit && a->actor == e->sel_idx;
+            return e->sel_unit >= 0 && a->actor == e->sel_unit;
         case ACT_BUILD: case ACT_SPAWN: case ACT_LEVELUP: case ACT_GATHER:
         case ACT_CLEAR_FOREST: case ACT_BURN_FOREST: case ACT_GROW_FOREST:
         case ACT_DESTROY:
-            return !e->sel_is_unit && a->actor == e->sel_idx;
+            return e->sel_city >= 0 && a->actor == e->sel_city;
         default:
             return false;
     }
@@ -318,7 +320,7 @@ static inline void env_new_game(PolyEnv* e) {
     uint32_t seed = poly_rand(&e->rng) | 1u;
     poly_reset(&e->game, ENV_PLAYERS, tribes, ENV_SIZE, MODE_CAPITALS, seed, e->fog != 0);
     e->phase = PH_SELECT;
-    e->sel_idx = -1; e->sel_tile = -1; e->sel_is_unit = false;
+    e->sel_unit = -1; e->sel_city = -1; e->sel_tile = -1;
     e->pend_kind = -1; e->pend_arg = -1;
     e->episode_steps = 0;
     e->prev_score[0] = e->game.players[0].score;
@@ -397,10 +399,14 @@ static inline void env_end_episode(PolyEnv* e) {
 
 // Abort a partially-entered micro-decision (UI cancel). Game state is
 // untouched — only the SELECT/VERB/TARGET machine rewinds.
+static inline void env_clear_selection(PolyEnv* e) {
+    e->sel_unit = -1; e->sel_city = -1; e->sel_tile = -1;
+    e->pend_kind = -1; e->pend_arg = -1;
+}
+
 static inline void poly_env_cancel(PolyEnv* e) {
     e->phase = PH_SELECT;
-    e->sel_idx = -1; e->sel_tile = -1;
-    e->pend_kind = -1; e->pend_arg = -1;
+    env_clear_selection(e);
     env_refresh_legal(e);
     env_emit(e);
 }
@@ -426,39 +432,30 @@ static inline void poly_env_step(PolyEnv* e) {
                 } else if (v >= V_RESEARCH0 && v < V_RESEARCH0 + NUM_TECH) {
                     ok = env_exec(e, &(PolyAction){ACT_RESEARCH, -1, -1, (int8_t)(v - V_RESEARCH0)});
                 } else if (v == V_BUILD_ROAD) {
+                    env_clear_selection(e);
                     e->pend_kind = ACT_BUILD_ROAD; e->pend_arg = -1;
-                    e->sel_idx = -1; e->sel_tile = -1; e->sel_is_unit = false;
                     e->phase = PH_TARGET;
                 } else ok = false;
             } else {
-                // tile: prefer the unit if it has legal actions, else the city
+                // tile: select the unit AND/OR the city on it — the verb mask
+                // becomes the union of both actors' actions
+                env_clear_selection(e);
                 int16_t ui = e->game.unit_at[act];
-                bool found = false;
-                if (ui >= 0) {
-                    for (int i = 0; i < e->n_legal && !found; i++) {
-                        int t = env_actor_tile(e, &e->legal[i]);
-                        if (t == act && e->legal[i].kind >= ACT_MOVE && e->legal[i].kind <= ACT_EXAMINE &&
-                            e->legal[i].actor == ui) {
-                            e->sel_is_unit = true; e->sel_idx = ui; found = true;
-                        }
-                    }
+                int ci = e->game.city_at[act];
+                bool city_centered = ci >= 0 &&
+                    tile_idx(&e->game, e->game.cities[ci].x, e->game.cities[ci].y) == act;
+                for (int i = 0; i < e->n_legal; i++) {
+                    if (env_actor_tile(e, &e->legal[i]) != act) continue;
+                    const PolyAction* a = &e->legal[i];
+                    if (ui >= 0 && a->kind >= ACT_MOVE && a->kind <= ACT_EXAMINE && a->actor == ui)
+                        e->sel_unit = ui;
+                    if (city_centered && a->kind >= ACT_BUILD && a->actor == ci)
+                        e->sel_city = (int16_t)ci;
                 }
-                if (!found) {
-                    int ci = e->game.city_at[act];
-                    if (ci >= 0) {
-                        const City* c = &e->game.cities[ci];
-                        if (tile_idx(&e->game, c->x, c->y) == act) {
-                            for (int i = 0; i < e->n_legal && !found; i++) {
-                                if (env_actor_tile(e, &e->legal[i]) == act &&
-                                    e->legal[i].kind >= ACT_BUILD && e->legal[i].actor == ci) {
-                                    e->sel_is_unit = false; e->sel_idx = (int16_t)ci; found = true;
-                                }
-                            }
-                        }
-                    }
-                }
-                if (found) { e->sel_tile = (int16_t)act; e->phase = PH_VERB; }
-                else ok = false;
+                if (e->sel_unit >= 0 || e->sel_city >= 0) {
+                    e->sel_tile = (int16_t)act;
+                    e->phase = PH_VERB;
+                } else ok = false;
             }
             break;
 
@@ -476,33 +473,35 @@ static inline void poly_env_step(PolyEnv* e) {
             else if (v == V_GROW_FOREST) kind = ACT_GROW_FOREST;
             else if (v == V_DESTROY) kind = ACT_DESTROY;
             if (kind < 0) { ok = false; break; }
+            // dispatch to whichever selected actor owns this verb slot
+            int16_t actor = kind >= ACT_MOVE && kind <= ACT_EXAMINE ? e->sel_unit : e->sel_city;
             if (verb_needs_target(kind)) {
                 e->pend_kind = (int8_t)kind; e->pend_arg = (int8_t)arg;
                 e->phase = PH_TARGET;
             } else {
-                ok = env_exec(e, &(PolyAction){(int8_t)kind, e->sel_idx, -1, (int8_t)arg});
+                ok = env_exec(e, &(PolyAction){(int8_t)kind, actor, -1, (int8_t)arg});
                 e->phase = PH_SELECT;
-                e->sel_idx = -1; e->sel_tile = -1;
+                env_clear_selection(e);
             }
             break;
         }
 
-        case PH_TARGET:
+        case PH_TARGET: {
             if (act >= ENV_TILES) { ok = false; break; }
-            ok = env_exec(e, &(PolyAction){e->pend_kind,
-                                           e->pend_kind == ACT_BUILD_ROAD ? -1 : e->sel_idx,
-                                           (int16_t)act, e->pend_arg});
+            int16_t actor = e->pend_kind == ACT_BUILD_ROAD ? -1
+                          : e->pend_kind >= ACT_MOVE && e->pend_kind <= ACT_EXAMINE ? e->sel_unit
+                          : e->sel_city;
+            ok = env_exec(e, &(PolyAction){e->pend_kind, actor, (int16_t)act, e->pend_arg});
             e->phase = PH_SELECT;
-            e->sel_idx = -1; e->sel_tile = -1;
-            e->pend_kind = -1; e->pend_arg = -1;
+            env_clear_selection(e);
             break;
+        }
     }
 
     if (!ok) {   // illegal (shouldn't happen with masks): forced end turn
         env_exec(e, &(PolyAction){ACT_END_TURN, -1, -1, -1});
         e->phase = PH_SELECT;
-        e->sel_idx = -1; e->sel_tile = -1;
-        e->pend_kind = -1; e->pend_arg = -1;
+        env_clear_selection(e);
     }
 
     e->episode_steps++;
