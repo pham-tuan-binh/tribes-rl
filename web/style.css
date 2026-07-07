@@ -30,7 +30,7 @@ body {
 }
 
 main {
-  display: flex; gap: 64px; padding: 32px;
+  display: flex; gap: 108px; padding: 32px;
   flex-wrap: wrap; align-items: flex-start; justify-content: center;
 }
 
