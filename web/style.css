@@ -13,8 +13,42 @@
   --cloudy: #b2afa8;
   --amber: #d97706;
   --amber-lt: #f59e0b;
+  --fog-tile: #f4f0e2;  /* unseen board tiles (read by the canvas renderer) */
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
+}
+
+/* dark: the same warm paper, lights off. Applied by system preference
+   unless the toggle pinned light, and always when the toggle pinned dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17140e;
+    --surface: #1e1a13;
+    --hover: #242017;
+    --border: #383226;
+    --rule: #272216;
+    --text: #ece6d6;
+    --mid: #938c78;
+    --cloudy: #635c4a;
+    --amber: #f59e0b;
+    --amber-lt: #fbbf24;
+    --fog-tile: #211d15;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17140e;
+  --surface: #1e1a13;
+  --hover: #242017;
+  --border: #383226;
+  --rule: #272216;
+  --text: #ece6d6;
+  --mid: #938c78;
+  --cloudy: #635c4a;
+  --amber: #f59e0b;
+  --amber-lt: #fbbf24;
+  --fog-tile: #211d15;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,11 +116,18 @@ canvas {
 }
 .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
+header { display: flex; align-items: baseline; justify-content: space-between; }
 header h1 {
   font: 700 26px Inter, sans-serif;
   letter-spacing: -0.01em;
 }
 header h1 .accent { color: var(--amber); }
+#theme {
+  border: none; background: transparent; padding: 4px;
+  display: flex; align-items: center;
+  color: var(--cloudy); cursor: pointer;
+}
+#theme:hover { color: var(--amber); border: none; background: transparent; }
 
 /* segmented controls: sharp, mono, active = inverted ink */
 .seg {

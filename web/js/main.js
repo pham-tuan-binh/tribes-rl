@@ -413,6 +413,24 @@ speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').t
 speedInput.onchange = () => resetGame();
 speedInput.oninput();
 
+// --- theme: system preference by default; the toggle pins light/dark ---
+const themeQuery = matchMedia('(prefers-color-scheme: dark)');
+const ICON_MOON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>';
+const ICON_SUN = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : themeQuery.matches;
+}
+function applyTheme(pin) {   // pin = 'light' | 'dark' | null (follow system)
+  if (pin) { document.documentElement.dataset.theme = pin; localStorage.setItem('theme', pin); }
+  else { delete document.documentElement.dataset.theme; localStorage.removeItem('theme'); }
+  $('theme').innerHTML = isDark() ? ICON_SUN : ICON_MOON;   // icon = what it switches to
+  if (renderer) renderer.refreshTheme();
+}
+$('theme').onclick = () => applyTheme(isDark() ? 'light' : 'dark');
+themeQuery.onchange = () => applyTheme(document.documentElement.dataset.theme || null);
+applyTheme(localStorage.getItem('theme'));
+
 // --- bootstrap: all declarations above are live now ---
 await loadEngine(state.players);
 requestAnimationFrame(frame);

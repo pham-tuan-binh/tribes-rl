@@ -19,19 +19,25 @@ export class Renderer {
     canvas.width = diag;
     canvas.height = diag;
     this.H = diag;
-    // paper-tone fog tile: unseen board blends into the page instead of
-    // reading as a dark backdrop behind the map
-    const fog = document.createElement('canvas');
-    fog.width = fog.height = cell;
-    const fx = fog.getContext('2d');
-    fx.fillStyle = '#f4f0e2';   // flat: unseen area reads as one seamless surface
-    fx.fillRect(0, 0, cell, cell);
-    this.fogTile = fog;
     // static board layer (terrain/city/roads/buildings/territory): rebuilt
     // only when its content signature changes; units + selection draw on top
     this.scv = document.createElement('canvas');
     this.scv.width = this.scv.height = diag;
     this.sctx = this.scv.getContext('2d');
+    this.fogTile = document.createElement('canvas');
+    this.fogTile.width = this.fogTile.height = cell;
+    this.refreshTheme();
+  }
+
+  // pick up the page theme (fog blends into the CURRENT background) and
+  // force a full redraw. Called on construction and on theme toggle.
+  refreshTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const fogColor = css.getPropertyValue('--fog-tile').trim() || '#f4f0e2';
+    this.rim = css.getPropertyValue('--bg').trim() || '#fffbf0';
+    const fx = this.fogTile.getContext('2d');
+    fx.fillStyle = fogColor;   // flat: unseen area reads as one seamless surface
+    fx.fillRect(0, 0, this.cell, this.cell);
     this.staticSig = null;
     this.frameSig = null;
   }
@@ -295,7 +301,7 @@ export class Renderer {
       const hp = g.unitHp(u), maxHp = g.unitMaxHp(u);
       const bh = c * 0.24, bw = Math.max(c * 0.3, bh * 0.6 + String(hp).length * bh * 0.42);
       const bx = x + imgSize - bw * 0.55, by = y - bh * 0.35;
-      ctx.fillStyle = '#fffbf0';
+      ctx.fillStyle = this.rim;
       ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
       ctx.fillStyle = PLAYER_COLOR[owner];
       ctx.fillRect(bx, by, bw, bh);
