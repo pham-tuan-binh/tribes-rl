@@ -15,6 +15,8 @@
   --amber-lt: #f59e0b;
   --fog-tile: #f4f0e2;  /* unseen board tiles (read by the canvas renderer) */
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* display face for game-flavored labels; data stays in the mono */
+  --pixel: 'Pixelify Sans', 'IBM Plex Mono', monospace;
   color-scheme: light;
 }
 
@@ -68,6 +70,31 @@ main {
   flex-wrap: wrap; align-items: flex-start; justify-content: center;
 }
 
+/* ---- loading screen: label, thin bar, percentage ---- */
+#loader {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  transition: opacity .6s ease;
+}
+#loader.is-out { opacity: 0; pointer-events: none; }
+.loader-box { width: min(280px, 72vw); display: flex; flex-direction: column; gap: 10px; }
+.loader-head { display: flex; justify-content: space-between; align-items: baseline; }
+#loader-label, #loader-pct {
+  font: 500 13px var(--pixel);
+  letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--mid); white-space: nowrap;
+}
+#loader-pct { font-variant-numeric: tabular-nums; }
+.loader-track { width: 100%; height: 2px; background: var(--border); overflow: hidden; }
+#loader-fill {
+  height: 100%; width: 100%;
+  transform: scaleX(0); transform-origin: left center;
+  background: var(--amber);
+  transition: transform .12s linear;
+  will-change: transform;
+}
+
 /* ---- board: no backdrop, blends into the page ---- */
 #board-wrap { position: relative; }
 canvas {
@@ -81,8 +108,8 @@ canvas {
 /* non-blocking result toast, styled like the reference tooltips: ink on latte */
 #banner {
   position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  font: 500 11px var(--mono);
-  letter-spacing: 0.4px;
+  font: 500 14px var(--pixel);
+  letter-spacing: 0.6px;
   background: var(--bg); color: var(--text);
   border: 1px solid var(--amber);
   padding: 7px 14px;
@@ -109,8 +136,8 @@ canvas {
 /* section header: the name, then the divider runs to the edge */
 .sec {
   display: flex; align-items: center; gap: 10px;
-  font: 600 9px var(--mono);
-  letter-spacing: 1.8px; text-transform: uppercase;
+  font: 500 12px var(--pixel);
+  letter-spacing: 1.2px; text-transform: uppercase;
   color: var(--cloudy);
   margin-bottom: 2px;
 }
@@ -126,8 +153,8 @@ header { display: flex; align-items: center; justify-content: space-between; }
 /* icons match the title's visual size */
 #gh svg, #theme svg { width: 21px; height: 21px; }
 header h1 {
-  font: 700 26px Inter, sans-serif;
-  letter-spacing: -0.01em;
+  font: 600 28px 'Pixelify Sans', Inter, sans-serif;
+  letter-spacing: .01em;
 }
 header h1 .accent { color: var(--amber); }
 #theme {
@@ -144,7 +171,7 @@ header h1 .accent { color: var(--amber); }
 }
 .seg-btn {
   flex: 1; border: 0; background: transparent;
-  font: 500 11px var(--mono);
+  font: 500 13px var(--pixel);
   letter-spacing: 1px; text-transform: uppercase;
   color: var(--mid);
   padding: 8px 0; cursor: pointer;
@@ -174,8 +201,8 @@ header h1 .accent { color: var(--amber); }
 }
 
 button {
-  font: 500 11px var(--mono);
-  letter-spacing: .4px;
+  font: 500 13px var(--pixel);
+  letter-spacing: .6px;
   background: var(--hover); color: var(--text);
   border: 1px solid var(--border);
   padding: 7px 12px; cursor: pointer;
@@ -213,8 +240,8 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber-lt); }
 }
 
 #status {
-  font: 500 11px var(--mono); font-variant-numeric: tabular-nums;
-  letter-spacing: .6px; text-transform: uppercase; color: var(--mid);
+  font: 500 13px var(--pixel);
+  letter-spacing: .8px; text-transform: uppercase; color: var(--mid);
 }
 
 /* player cards: seat color as a slim left rule */

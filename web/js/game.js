@@ -123,12 +123,32 @@ export class Game {
   // fetch trained weights (native trainer .bin); returns true on success.
   // weights are per player count (obs dims differ): latest_3p.bin etc.,
   // with latest.bin as the 2-player default.
-  async loadWeights(players = 2) {
+  async loadWeights(players = 2, onProgress = null) {
     const url = players === 2 ? 'weights/latest.bin' : `weights/latest_${players}p.bin`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) return false;
-      const data = new Uint8Array(await resp.arrayBuffer());
+      let data;
+      const total = +resp.headers.get('content-length') || 0;
+      if (resp.body && total && onProgress) {
+        // stream so the loading screen can show real byte progress on the
+        // one download that dominates startup
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let got = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          got += value.length;
+          onProgress(Math.min(1, got / total));
+        }
+        data = new Uint8Array(got);
+        let off = 0;
+        for (const c of chunks) { data.set(c, off); off += c.length; }
+      } else {
+        data = new Uint8Array(await resp.arrayBuffer());
+      }
       const ptr = this.weightsAlloc(data.length);
       this.m.HEAPU8.set(data, ptr);
       return this.weightsLoad(data.length) === 1;

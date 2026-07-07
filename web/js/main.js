@@ -8,6 +8,15 @@ import { RandomAgent, TrainedAgent } from './agent.js';
 
 const $ = (id) => document.getElementById(id);
 
+// --- loading screen: real progress across sprites -> engine -> weights ---
+function setLoad(label, frac) {
+  $('loader-label').textContent = label;
+  $('loader-pct').textContent = `${Math.round(frac * 100)}%`;
+  $('loader-fill').style.transform = `scaleX(${frac})`;
+}
+function showLoader() { $('loader').classList.remove('is-out'); }
+function hideLoader() { setLoad('ready', 1); $('loader').classList.add('is-out'); }
+
 const state = {
   mode: 'agents',          // 'agents' | 'human'
   paused: false,
@@ -19,16 +28,19 @@ const state = {
                            // -1 = whole world, 0..N-1 = a fixed agent's fog
 };
 
-const assets = await Assets.load();
+const assets = await Assets.load('assets', (f) => setLoad('sprites', f * 0.35));
 let game, renderer, agent;
 
 async function loadEngine(players) {
+  state.loading = true;   // freeze the sim loop while the engine swaps out
+  showLoader();
+  setLoad('engine', 0.38);
   game = await Game.load(players);
   // observe every applied action (agent AND human) for the shared log
   const rawAct = game.act;
   game.act = (a) => { logAction(game.activePlayer(), a, game.phase()); return rawAct(a); };
   renderer = new Renderer($('board'), game, assets);
-  const trained = await game.loadWeights(players);
+  const trained = await game.loadWeights(players, (f) => setLoad('policy weights', 0.42 + f * 0.58));
   agent = trained ? new TrainedAgent() : new RandomAgent();
   document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
   game.newGame((Math.random() * 2 ** 31) | 0);
@@ -39,6 +51,8 @@ async function loadEngine(players) {
   $('banner').classList.add('hidden');
   buildPlayersSeg();
   buildViewSeg();
+  hideLoader();
+  state.loading = false;
 }
 
 function buildPlayersSeg() {
@@ -98,8 +112,10 @@ function flushLog() {
   if (!logDirty) return;
   logDirty = false;
   const el = $('log-lines');
+  // don't yank the view away from someone reading scrolled-back history
+  const follow = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
   el.innerHTML = logBuf.join('<br>');
-  el.scrollTop = el.scrollHeight;
+  if (follow) el.scrollTop = el.scrollHeight;
 }
 function clearLog() {
   logBuf.length = 0;
@@ -327,7 +343,7 @@ function frame(now) {
   const dt = Math.min(now - last, 100) / 1000;
   last = now;
 
-  if (!state.paused && !humanTurn()) {
+  if (!state.paused && !state.loading && !humanTurn()) {
     const aps = actionsPerSecond();
     if (aps === Infinity) {
       // unthrottled: spend most of the frame simulating, paint at ~30fps

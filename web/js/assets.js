@@ -41,7 +41,7 @@ function deborder(img, inset = 3) {
 }
 
 export class Assets {
-  static async load(base = 'assets') {
+  static async load(base = 'assets', onProgress = null) {
     const a = new Assets();
     // manifest of files that actually exist (written by web/build.sh), so we
     // never request the hundreds of optional variants that aren't there
@@ -83,7 +83,8 @@ export class Assets {
     put(a.misc, 'walls', `${base}/terrain/walls.png`);
     put(a.misc, 'roadV', `${base}/terrain/road-v-half.png`);
     put(a.misc, 'roadD', `${base}/terrain/road-d-half.png`);
-    await Promise.all(jobs);
+    let done = 0;
+    await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
     return a;
   }
 

@@ -4,17 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tribes-rl</title>
+<script>/* apply a pinned theme before first paint (no flash) */
+try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='16' y='2' width='20' height='20' fill='%23d97706' transform='rotate(45 16 16)'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@500;600&family=Pixelify+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <!-- start the big downloads (engine + policy weights) with the page, not after JS boots -->
 <link rel="modulepreload" href="dist/poly2.js">
 <link rel="preload" href="dist/poly2.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
 <link rel="preload" href="weights/latest.bin" as="fetch" crossorigin="anonymous">
+<!-- warm the 4-player engine + weights in the background for instant switching -->
+<link rel="prefetch" href="dist/poly4.js">
+<link rel="prefetch" href="dist/poly4.wasm">
+<link rel="prefetch" href="weights/latest_4p.bin">
 </head>
 <body>
+<div id="loader">
+  <div class="loader-box">
+    <div class="loader-head">
+      <span id="loader-label">loading</span>
+      <span id="loader-pct">0%</span>
+    </div>
+    <div class="loader-track"><div id="loader-fill"></div></div>
+  </div>
+</div>
 <main>
   <div id="board-wrap">
     <canvas id="board" width="704" height="704"></canvas>
