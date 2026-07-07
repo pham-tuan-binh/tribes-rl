@@ -113,6 +113,9 @@ static void test_capitals_win(void) {
     poly_begin(&S);
     PolyAction cap = {ACT_CAPTURE, (int16_t)u, -1, -1};
     CHECK(poly_step(&S, &cap));
+    CHECK(!S.game_over);                    // Java: game over only at turn end
+    PolyAction end = {ACT_END_TURN, -1, -1, -1};
+    CHECK(poly_step(&S, &end));
     CHECK(S.game_over);
     CHECK(S.players[0].result == RESULT_WIN && S.players[1].result == RESULT_LOSS);
 }

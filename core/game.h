@@ -93,7 +93,9 @@ static inline void poly_check_game_over(PolyState* s) {
             }
         }
     }
-    if (alive <= 1) {
+    // Java: the <=1-alive termination is evaluated only in SCORE mode
+    // (GameState.gameOver); in CAPITALS the all-capitals check covers it.
+    if (s->mode == MODE_SCORE && alive <= 1) {
         if (last_alive >= 0) s->players[last_alive].result = RESULT_WIN;
         s->game_over = true;
         return;
@@ -150,10 +152,9 @@ static inline bool poly_step(PolyState* s, const PolyAction* a) {
         return true;
     }
     bool ok = poly_execute_action(s, a);
-    if (ok) {
-        poly_check_monuments(s, s->active_player);
-        poly_check_game_over(s);
-    }
+    if (ok) poly_check_monuments(s, s->active_player);
+    // Java evaluates game over only at turn boundaries (Game.tick after
+    // processTurn) — a mid-turn capture does not end the game until EndTurn.
     return ok;
 }
 
