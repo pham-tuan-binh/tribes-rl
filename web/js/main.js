@@ -451,6 +451,8 @@ applyTheme(localStorage.getItem('theme'));
 // --- bootstrap: all declarations above are live now ---
 await loadEngine(state.players);
 requestAnimationFrame(frame);
+// warm the 4p weights into the HTTP cache once the first game is running
+setTimeout(() => { fetch('weights/latest_4p.bin').catch(() => {}); }, 10000);
 
 // debug/test handle (also handy in the browser console)
 window.__poly = {

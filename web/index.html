@@ -15,10 +15,10 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
 <link rel="modulepreload" href="dist/poly2.js">
 <link rel="preload" href="dist/poly2.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
 <link rel="preload" href="weights/latest.bin" as="fetch" crossorigin="anonymous">
-<!-- warm the 4-player engine + weights in the background for instant switching -->
+<!-- warm the 4-player engine in the background (its 31MB weights are warmed
+     from JS after boot, so they never compete with the first load) -->
 <link rel="prefetch" href="dist/poly4.js">
 <link rel="prefetch" href="dist/poly4.wasm">
-<link rel="prefetch" href="weights/latest_4p.bin">
 </head>
 <body>
 <div id="loader">
