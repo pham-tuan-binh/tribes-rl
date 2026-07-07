@@ -28,8 +28,14 @@ function load(src) {
 export class Assets {
   static async load(base = 'assets') {
     const a = new Assets();
+    // manifest of files that actually exist (written by web/build.sh), so we
+    // never request the hundreds of optional variants that aren't there
+    const have = new Set(await fetch(`${base}/manifest.json`).then((r) => r.ok ? r.json() : []).catch(() => []));
     const jobs = [];
-    const put = (obj, key, src) => jobs.push(load(src).then((img) => { obj[key] = img; }));
+    const put = (obj, key, src) => {
+      if (have.size && !have.has(src.slice(base.length + 1))) return;
+      jobs.push(load(src).then((img) => { obj[key] = img; }));
+    };
 
     a.terrain = {};      // base tile per terrain id
     a.variants = {};     // `${terrainId}|${suffix}` -> image
@@ -54,7 +60,6 @@ export class Assets {
     });
 
     a.misc = {};
-    put(a.misc, 'fog', `${base}/fog.png`);
     put(a.misc, 'shine', `${base}/shine3.png`);
     put(a.misc, 'walls', `${base}/terrain/walls.png`);
     put(a.misc, 'roadV', `${base}/terrain/road-v-half.png`);

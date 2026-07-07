@@ -12,4 +12,8 @@ for N in 2 3 4; do
       -o "dist/poly$N.js" \
       wasm/bridge.c
 done
-echo "built dist/poly{2,3,4}.js ($(du -h dist/poly2.wasm | cut -f1) each)"
+# manifest of existing sprites: the loader only requests listed files instead
+# of probing every optional variant (hundreds of 404s otherwise)
+(cd assets && find . -name '*.png' | sed 's|^\./||' | sort \
+  | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' > manifest.json)
+echo "built dist/poly{2,3,4}.js ($(du -h dist/poly2.wasm | cut -f1) each) + assets/manifest.json"

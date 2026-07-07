@@ -50,8 +50,13 @@ export class Game {
     const f = (name, ret, args) => g.m.cwrap(name, ret, args);
     g.newGameRaw = f('poly_new_game', null, ['number', 'number']);
     g.visible = f('poly_visible', 'number', ['number', 'number']);
-    g.cancel = f('poly_cancel', null, []);
-    g.act = f('poly_act', 'number', ['number']);
+    // every state mutation flows through act/cancel/newGame; the version
+    // counter lets the renderer skip frames where nothing changed
+    g.version = 0;
+    const rawCancel = f('poly_cancel', null, []);
+    g.cancel = () => { g.version++; rawCancel(); };
+    const rawAct = f('poly_act', 'number', ['number']);
+    g.act = (a) => { g.version++; return rawAct(a); };
     g.agentAct = f('poly_agent_act', 'number', ['number']);
     g.hasAgent = f('poly_has_agent', 'number', []);
     g.weightsAlloc = f('poly_weights_alloc', 'number', ['number']);
@@ -95,7 +100,7 @@ export class Game {
     return g;
   }
 
-  newGame(seed, fog = true) { this.newGameRaw(seed >>> 0, fog ? 1 : 0); this.players = this.numPlayers(); }
+  newGame(seed, fog = true) { this.version++; this.newGameRaw(seed >>> 0, fog ? 1 : 0); this.players = this.numPlayers(); }
 
   // fresh views each call: WASM memory may grow and detach old buffers
   bytes(ptr, len) { return new Uint8Array(this.m.HEAPU8.buffer, ptr, len); }

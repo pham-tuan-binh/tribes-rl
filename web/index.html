@@ -3,11 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>polytopia-rl</title>
+<title>tribes-rl</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='16' y='2' width='20' height='20' fill='%23d97706' transform='rotate(45 16 16)'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<!-- start the big downloads (engine + policy weights) with the page, not after JS boots -->
+<link rel="modulepreload" href="dist/poly2.js">
+<link rel="preload" href="dist/poly2.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
+<link rel="preload" href="weights/latest.bin" as="fetch" crossorigin="anonymous">
 </head>
 <body>
 <main>
@@ -18,13 +23,13 @@
 
   <aside id="panel">
     <header>
-      <h1>polytopia<span class="accent">·rl</span></h1>
+      <h1>tribes<span class="accent">-rl</span></h1>
       <p class="tagline">agents learn to conquer</p>
     </header>
 
     <div class="seg" id="mode-row" role="tablist">
-      <button id="mode-agents" class="seg-btn active" role="tab">⚡ Agents</button>
-      <button id="mode-human" class="seg-btn" role="tab">✿ Human</button>
+      <button id="mode-agents" class="seg-btn active" role="tab">agents</button>
+      <button id="mode-human" class="seg-btn" role="tab">human</button>
     </div>
 
     <div class="row" id="players-row">
@@ -45,7 +50,7 @@
       <div class="row btns">
         <button id="new-game">new game</button>
         <button id="pause">pause</button>
-        <button id="end-turn" class="primary">end turn ⏎</button>
+        <button id="end-turn" class="primary">end turn</button>
       </div>
       <div id="status"></div>
       <div id="scoreboard" class="hidden"></div>

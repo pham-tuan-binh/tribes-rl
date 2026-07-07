@@ -19,6 +19,21 @@ export class Renderer {
     canvas.width = diag;
     canvas.height = diag;
     this.H = diag;
+    // paper-tone fog tile: unseen board blends into the page instead of
+    // reading as a dark backdrop behind the map
+    const fog = document.createElement('canvas');
+    fog.width = fog.height = cell;
+    const fx = fog.getContext('2d');
+    fx.fillStyle = '#f4f0e2';   // flat: unseen area reads as one seamless surface
+    fx.fillRect(0, 0, cell, cell);
+    this.fogTile = fog;
+    // static board layer (terrain/city/roads/buildings/territory): rebuilt
+    // only when its content signature changes; units + selection draw on top
+    this.scv = document.createElement('canvas');
+    this.scv.width = this.scv.height = diag;
+    this.sctx = this.scv.getContext('2d');
+    this.staticSig = null;
+    this.frameSig = null;
   }
 
   // rotated-frame screen coordinates of grid cell (col, row), top-left corner
@@ -34,14 +49,23 @@ export class Renderer {
   }
 
   // draw image in the ROTATED frame, centered in cell (col,row), sized px
-  drawRot(img, col, row, size) {
+  drawRot(img, col, row, size, ctx = this.ctx) {
     if (!img) return;
-    const ctx = this.ctx, c = this.cell;
+    const c = this.cell;
     ctx.save();
     ctx.translate(0, this.H / 2);
     ctx.rotate(-DEG45);
     ctx.drawImage(img, col * c + (c - size) / 2, row * c + (c - size) / 2, size, size);
     ctx.restore();
+  }
+
+  // draw image UPRIGHT (screen-vertical), horizontally centered on tile
+  // (col,row) and bottom-anchored near the tile centre. Used for buildings and
+  // resources whose sprites are drawn straight (like units), not pre-rotated.
+  drawUpright(img, col, row, size, lift = 0.3, ctx = this.ctx) {
+    if (!img) return;
+    const p = this.rotPoint(col + 0.5, row + 0.5);   // screen centre of the tile
+    ctx.drawImage(img, p.x - size / 2, p.y - size * (0.5 + lift), size, size);
   }
 
   // GameView.getContextImg — edge-variant selection. i = row, j = col.
@@ -104,29 +128,77 @@ export class Renderer {
   }
 
   draw(ui) {
-    const g = this.g, ctx = this.ctx, c = this.cell, a = this.a, N = g.size;
+    const g = this.g, ctx = this.ctx, c = this.cell, N = g.size;
+    const viewer = ui && ui.viewer >= 0 ? ui.viewer : -1;   // -1 = omniscient
+    const sel = g.selectedTile();
+    let hl = 0;
+    if (ui && ui.highlightTiles) for (const t of ui.highlightTiles) hl = (Math.imul(hl, 31) + t + 1) | 0;
+
+    // frame gate: identical state + view since last frame -> draw nothing
+    const frameSig = `${g.version}|${viewer}|${sel}|${hl}`;
+    if (frameSig === this.frameSig) return;
+    this.frameSig = frameSig;
+
+    // per-tile visibility, computed once per changed frame
+    const seen = this._seen || (this._seen = new Uint8Array(N * N));
+    for (let t = 0; t < N * N; t++) seen[t] = viewer < 0 || g.visible(viewer, t) ? 1 : 0;
+
+    // static layer signature: everything drawn below units (FNV-1a)
     const terr = g.terrain(), res = g.resource(), bld = g.building(),
           roads = g.roads(), cityAt = g.cityAt();
-    const viewer = ui && ui.viewer >= 0 ? ui.viewer : -1;   // -1 = omniscient
-    const seen = (t) => viewer < 0 || g.visible(viewer, t);
-    ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+    let h = 0x811c9dc5;
+    for (let t = 0; t < N * N; t++) {
+      h = Math.imul(h ^ (terr[t] & 0xff), 0x01000193);
+      h = Math.imul(h ^ (res[t] & 0xff), 0x01000193);
+      h = Math.imul(h ^ (bld[t] & 0xff), 0x01000193);
+      h = Math.imul(h ^ roads[t], 0x01000193);
+      h = Math.imul(h ^ (cityAt[t] & 0xff), 0x01000193);
+      h = Math.imul(h ^ seen[t], 0x01000193);
+      const ci = cityAt[t];
+      if (ci >= 0 && seen[t]) {
+        h = Math.imul(h ^ g.cityOwner(ci), 0x01000193);
+        h = Math.imul(h ^ (g.cityLevel(ci) + (g.cityWalls(ci) << 5)), 0x01000193);
+      }
+    }
+    const staticSig = `${h}|${viewer}|${hl}`;
+    if (staticSig !== this.staticSig) {
+      this.staticSig = staticSig;
+      this.renderStatic(ui, seen, terr, res, bld, roads, cityAt);
+    }
 
-    // 1. terrain (fog for unseen; city tiles use the plain context underneath)
+    ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+    ctx.drawImage(this.scv, 0, 0);
+    this.renderUnits(seen);
+
+    // selection outline (rotated rect, like highlightTile)
+    if (sel >= 0 && seen[sel])
+      this.strokeCellRot(sel % N, Math.floor(sel / N), '#ffffff', 2.5);
+  }
+
+  // terrain / city / roads / shine / resources / buildings / territory + badges
+  renderStatic(ui, seenArr, terr, res, bld, roads, cityAt) {
+    const g = this.g, ctx = this.sctx, c = this.cell, a = this.a, N = g.size;
+    const seen = (t) => seenArr[t] === 1;
+    ctx.clearRect(0, 0, this.scv.width, this.scv.height);
+
+    // 1. terrain (fog for unseen; city tiles use the plain context underneath).
+    // Tiles are drawn a hair oversized: under the -45° rotation their edges land
+    // on fractional device pixels and antialiasing leaves visible seam lines.
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const t = i * N + j;
       let img;
-      if (!seen(t)) img = a.misc.fog;
+      if (!seen(t)) img = this.fogTile;
       else img = this.contextTerrain(terr, i, j, terr[t] === 5 ? 0 : terr[t]);
-      this.drawRot(img, j, i, c);
+      this.drawRot(img, j, i, c + 1.5, ctx);
     }
 
     // 2. city tiles on top of their plain base
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const t = i * N + j;
       if (seen(t) && terr[t] === 5) {
-        this.drawRot(a.terrain[5], j, i, c);
+        this.drawRot(a.terrain[5], j, i, c, ctx);
         const ci = cityAt[t];
-        if (ci >= 0 && g.cityWalls(ci)) this.drawRot(a.misc.walls, j, i, c);
+        if (ci >= 0 && g.cityWalls(ci)) this.drawRot(a.misc.walls, j, i, c, ctx);
       }
     }
 
@@ -154,7 +226,7 @@ export class Renderer {
         ctx.restore();
       }
       if (!any && terr[t] !== 5 && bld[t] !== 0)   // lone road dot (not city/port)
-        this.drawRot(a.misc.roadV, j, i, c);
+        this.drawRot(a.misc.roadV, j, i, c, ctx);
     }
 
     // 4. shine + resources + buildings (rotated frame, GameView sizes)
@@ -162,13 +234,13 @@ export class Renderer {
       const t = i * N + j;
       if (!seen(t)) continue;
       if (ui && ui.highlightTiles && ui.highlightTiles.has(t))
-        this.drawRot(a.misc.shine, j, i, c);
+        this.drawRot(a.misc.shine, j, i, c, ctx);
       if (res[t] >= 0 && res[t] !== 4 && a.resource[res[t]])
-        this.drawRot(a.resource[res[t]], j, i, c * 0.75);
+        this.drawUpright(a.resource[res[t]], j, i, c * 0.8, 0.12, ctx);
       const b = bld[t];
       if (b >= 0 && b !== 19) {
         const big = b !== 5 && !(b >= 8 && b <= 11);   // customs house & temples smaller
-        this.drawRot(a.building[b], j, i, big ? c : c * 0.75);
+        this.drawUpright(a.building[b], j, i, big ? c * 1.1 : c * 0.85, 0.34, ctx);
       }
     }
 
@@ -177,7 +249,7 @@ export class Renderer {
       const t = i * N + j;
       const ci = cityAt[t];
       if (ci < 0 || !seen(t)) continue;
-      this.strokeCellRot(j, i, PLAYER_COLOR[g.cityOwner(ci)] + '55', 1.5);
+      this.strokeCellRot(j, i, PLAYER_COLOR[g.cityOwner(ci)] + '55', 1.5, ctx);
       if (terr[t] === 5) {
         const p = this.rotPoint(j, i);
         const label = `${g.cityLevel(ci)}${g.cityCapital(ci) ? '★' : ''}`;
@@ -192,11 +264,14 @@ export class Renderer {
         ctx.fillText(label, bx + bw / 2, by + bh / 2 + 1);
       }
     }
+  }
 
-    // 6. units — upright sprites at rotated anchors (GameView.paintUnits)
+  // units: the per-frame dynamic layer (upright sprites at rotated anchors)
+  renderUnits(seenArr) {
+    const g = this.g, ctx = this.ctx, c = this.cell, a = this.a, N = g.size;
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const t = i * N + j;
-      if (!seen(t)) continue;
+      if (!seenArr[t]) continue;
       const u = g.unitAt(t);
       if (u < 0) continue;
       const type = g.unitType(u);
@@ -226,15 +301,10 @@ export class Renderer {
       ctx.arc(x + imgSize - 3, y + 4, c * 0.06, 0, 7);
       ctx.fill();
     }
-
-    // 7. selection outline (rotated rect, like highlightTile)
-    const sel = g.selectedTile();
-    if (sel >= 0 && seen(sel))
-      this.strokeCellRot(sel % N, Math.floor(sel / N), '#ffffff', 2.5);
   }
 
-  strokeCellRot(col, row, style, width) {
-    const ctx = this.ctx, c = this.cell;
+  strokeCellRot(col, row, style, width, ctx = this.ctx) {
+    const c = this.cell;
     ctx.save();
     ctx.translate(0, this.H / 2);
     ctx.rotate(-DEG45);
