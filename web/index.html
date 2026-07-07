@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>polytopia-rl</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div id="board-wrap">
+    <canvas id="board" width="704" height="704"></canvas>
+    <div id="banner" class="hidden"></div>
+  </div>
+  <aside id="panel">
+    <h1>polytopia-rl</h1>
+    <div class="row" id="mode-row">
+      <button id="mode-agents" class="mode active">Agents</button>
+      <button id="mode-human" class="mode">Human</button>
+    </div>
+    <div class="row" id="speed-row">
+      <label for="speed">speed</label>
+      <input type="range" id="speed" min="0" max="100" value="35">
+      <span id="speed-label"></span>
+    </div>
+    <div class="row">
+      <button id="new-game">new game</button>
+      <button id="pause">pause</button>
+    </div>
+    <div id="status"></div>
+    <div id="players"></div>
+    <div id="verbs" class="hidden">
+      <h2>choose action</h2>
+      <div id="verb-buttons"></div>
+    </div>
+    <div id="hint"></div>
+  </aside>
+</main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

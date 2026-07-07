@@ -132,6 +132,7 @@ typedef struct {
     int32_t episode_steps;
     int32_t max_episode_steps;
     uint32_t rng;            // env-level rng (map seeds, tribe picks)
+    int8_t final_result[ENV_PLAYERS];   // last finished episode (env auto-resets)
 } PolyEnv;
 
 // ---------------------------------------------------------------------------
@@ -369,6 +370,7 @@ static inline void env_end_episode(PolyEnv* e) {
         else if (e->game.players[a].result == RESULT_LOSS) r = -1.0f;
         *e->reward_ptr[a] += r;
         *e->terminal_ptr[a] = 1.0f;
+        e->final_result[a] = (int8_t)e->game.players[a].result;
     }
     e->boundary_reached = 1;   // selfplay pool episode boundary
     e->log.score += (float)(e->game.players[0].score + e->game.players[1].score) / 2.0f;
