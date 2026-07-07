@@ -49,6 +49,7 @@ export class Game {
     const f = (name, ret, args) => g.m.cwrap(name, ret, args);
     g.newGameRaw = f('poly_new_game', null, ['number', 'number']);
     g.visible = f('poly_visible', 'number', ['number', 'number']);
+    g.cancel = f('poly_cancel', null, []);
     g.act = f('poly_act', 'number', ['number']);
     g.maskPtr = f('poly_mask', 'number', ['number']);
     g.terrainPtr = f('poly_terrain', 'number', []);

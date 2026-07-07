@@ -21,6 +21,8 @@ button {
 }
 button:hover { background: #263242; }
 button.mode.active { background: #2e4a6b; border-color: #3f6a9b; }
+button.primary { background: #2e6b4a; border-color: #3f9b6a; }
+button:disabled { opacity: .4; cursor: default; }
 input[type=range] { flex: 1; }
 #status { opacity: .85; min-height: 1.4em; }
 #players div { padding: 3px 6px; border-radius: 4px; margin: 2px 0; }

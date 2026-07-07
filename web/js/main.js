@@ -14,6 +14,7 @@ const state = {
   speed: 35,               // slider 0..100; 100 = unthrottled
   stepAccum: 0,
   bannerUntil: 0,
+  panelSig: '',            // rebuild the side panel only when this changes
 };
 
 const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
@@ -33,30 +34,12 @@ function speedLabel() {
 
 // --- human interaction ---
 function humanTurn() { return state.mode === 'human' && game.activePlayer() === 0 && !game.gameOver(); }
+function viewer() { return state.mode === 'human' ? 0 : -1; }
 
 function legalTiles() {
   const m = game.mask(0), out = new Set();
   for (let t = 0; t < game.tiles; t++) if (m[t]) out.add(t);
   return out;
-}
-// Human mode renders from the human's perspective (fog); Agents mode is omniscient.
-function viewer() { return state.mode === 'human' ? 0 : -1; }
-
-function showVerbs() {
-  const box = $('verbs'), btns = $('verb-buttons');
-  btns.innerHTML = '';
-  if (!humanTurn()) { box.classList.add('hidden'); return; }
-  const m = game.mask(0);
-  let any = false;
-  for (let v = 0; v < V.N; v++) {
-    if (!m[game.tiles + v]) continue;
-    any = true;
-    const b = document.createElement('button');
-    b.textContent = verbName(v);
-    b.onclick = () => { game.act(game.tiles + v); afterAction(); };
-    btns.appendChild(b);
-  }
-  box.classList.toggle('hidden', !any);
 }
 
 $('board').addEventListener('click', (ev) => {
@@ -65,22 +48,62 @@ $('board').addEventListener('click', (ev) => {
   const scale = $('board').width / rect.width;
   const { col, row } = renderer.unproject((ev.clientX - rect.left) * scale,
                                           (ev.clientY - rect.top) * scale);
-  if (col < 0 || row < 0 || col >= game.size || row >= game.size) return;
+  if (col < 0 || row < 0 || col >= game.size || row >= game.size) {
+    if (game.phase() > 0) game.cancel();   // click off-board = cancel
+    return;
+  }
   const t = row * game.size + col;
-  if (game.mask(0)[t]) { game.act(t); afterAction(); }
+  if (game.mask(0)[t]) game.act(t);
+  else if (game.phase() > 0) game.cancel(); // illegal tile while selecting = cancel
+  if (game.gameOver()) showResult();
+});
+window.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && humanTurn() && game.phase() > 0) game.cancel();
 });
 
-function afterAction() {
-  if (game.gameOver()) showResult();
-  refreshPanel();
-  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
+// --- side panel (rebuilt only when the situation changes) ---
+const PHASE_HINT = [
+  'select a unit or city (glowing tiles), research, or end your turn',
+  'choose what the selected piece does — Esc to cancel',
+  'choose a target tile (glowing) — Esc to cancel',
+];
+
+function panelSignature() {
+  if (!humanTurn()) return `off|${game.activePlayer()}|${game.tick()}`;
+  const m = game.mask(0);
+  let verbs = '';
+  for (let v = 0; v < V.N; v++) if (m[game.tiles + v]) verbs += v + ',';
+  return `on|${game.phase()}|${game.selectedTile()}|${verbs}`;
 }
 
-// --- panel ---
+function rebuildPanel() {
+  const btns = $('verb-buttons');
+  btns.innerHTML = '';
+  const box = $('verbs');
+  if (!humanTurn()) { box.classList.add('hidden'); $('end-turn').disabled = true; return; }
+  const m = game.mask(0);
+  $('end-turn').disabled = !m[game.tiles + V.END_TURN];
+  let any = false;
+  for (let v = 0; v < V.N; v++) {
+    if (v === V.END_TURN || !m[game.tiles + v]) continue;
+    any = true;
+    const b = document.createElement('button');
+    b.textContent = verbName(v);
+    b.onclick = () => { game.act(game.tiles + v); if (game.gameOver()) showResult(); };
+    btns.appendChild(b);
+  }
+  box.classList.toggle('hidden', !any);
+}
+
 function refreshPanel() {
+  const sig = panelSignature();
+  if (sig !== state.panelSig) {
+    state.panelSig = sig;
+    rebuildPanel();
+  }
   const active = game.activePlayer();
   $('status').textContent =
-    `turn ${game.tick()}  ·  ${state.mode === 'human' && active === 0 ? 'your move' : `player ${active + 1} thinking`}`;
+    `turn ${game.tick()}  ·  ${humanTurn() ? 'YOUR TURN' : `player ${active + 1} thinking`}`;
   const box = $('players');
   box.innerHTML = '';
   for (let p = 0; p < game.players; p++) {
@@ -89,16 +112,13 @@ function refreshPanel() {
     d.textContent = `p${p + 1}  ★${game.stars(p)}  score ${game.score(p)}`;
     box.appendChild(d);
   }
-  showVerbs();
-  $('hint').textContent = humanTurn()
-    ? 'click a highlighted tile, or pick an action on the right'
-    : state.mode === 'human' ? '' : 'agents are playing';
+  $('hint').textContent = humanTurn() ? PHASE_HINT[game.phase()] :
+    state.mode === 'human' ? '' : 'agents are playing';
 }
-function countBits(x) { let n = 0; while (x) { n += x & 1; x >>>= 1; } return n; }
 
 function showResult() {
   const el = $('banner');
-  if (game.result(0) === 2) {          // Might rules: turn cap = draw
+  if (game.result(0) === 2) {
     el.textContent = 'draw — no capital conquest';
     el.style.color = '#dfe6ee';
   } else {
@@ -121,7 +141,6 @@ function frame(now) {
   if (!state.paused && !humanTurn()) {
     const aps = actionsPerSecond();
     if (aps === Infinity) {
-      // unthrottled: sim for up to 12 ms per frame
       const budget = performance.now() + 12;
       while (performance.now() < budget) {
         stepAgentOnce();
@@ -163,11 +182,19 @@ function setMode(m) {
   state.mode = m;
   $('mode-agents').classList.toggle('active', m === 'agents');
   $('mode-human').classList.toggle('active', m === 'human');
+  $('speed-row').classList.toggle('hidden', m === 'human');
   game.newGame((Math.random() * 2 ** 31) | 0);
   $('banner').classList.add('hidden');
+  state.panelSig = '';
 }
-$('new-game').onclick = () => { game.newGame((Math.random() * 2 ** 31) | 0); $('banner').classList.add('hidden'); };
+$('new-game').onclick = () => { game.newGame((Math.random() * 2 ** 31) | 0); $('banner').classList.add('hidden'); state.panelSig = ''; };
 $('pause').onclick = () => { state.paused = !state.paused; $('pause').textContent = state.paused ? 'resume' : 'pause'; };
+$('end-turn').onclick = () => {
+  if (humanTurn() && game.mask(0)[game.tiles + V.END_TURN]) {
+    game.act(game.tiles + V.END_TURN);
+    if (game.gameOver()) showResult();
+  }
+};
 const speedInput = $('speed');
 speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').textContent = speedLabel(); };
 speedInput.oninput();

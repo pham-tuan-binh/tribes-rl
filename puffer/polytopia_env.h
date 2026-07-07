@@ -395,6 +395,16 @@ static inline void env_end_episode(PolyEnv* e) {
     env_new_game(e);
 }
 
+// Abort a partially-entered micro-decision (UI cancel). Game state is
+// untouched — only the SELECT/VERB/TARGET machine rewinds.
+static inline void poly_env_cancel(PolyEnv* e) {
+    e->phase = PH_SELECT;
+    e->sel_idx = -1; e->sel_tile = -1;
+    e->pend_kind = -1; e->pend_arg = -1;
+    env_refresh_legal(e);
+    env_emit(e);
+}
+
 // One tick: applies the active player's micro-action, updates rewards,
 // terminals, obs and masks for both agents.
 static inline void poly_env_step(PolyEnv* e) {
@@ -510,9 +520,11 @@ static inline void poly_env_step(PolyEnv* e) {
     if (e->game.game_over) {
         env_end_episode(e);
     } else if (e->episode_steps >= e->max_episode_steps) {
-        // stall guard: force end-of-game ranking by current score
+        // stall guard: end the episode as a draw (log the real tick first)
+        int32_t real_tick = e->game.tick;
         e->game.tick = e->game.max_turns + 1;
         poly_check_game_over(&e->game);
+        e->game.tick = real_tick;
         env_end_episode(e);
     }
 

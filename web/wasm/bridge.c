@@ -54,6 +54,7 @@ EMSCRIPTEN_KEEPALIVE int poly_act(int action) {
     return term_buf[0] > 0.5f ? 0 : 1;
 }
 
+EMSCRIPTEN_KEEPALIVE void poly_cancel(void) { poly_env_cancel(&E); }
 EMSCRIPTEN_KEEPALIVE const unsigned char* poly_mask(int player) { return mask_buf[player]; }
 EMSCRIPTEN_KEEPALIVE const uint8_t* poly_obs(int player) { return &obs_buf[player][0]; }
 
