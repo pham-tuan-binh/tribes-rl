@@ -3,6 +3,7 @@
 //   Human  — you are red (player 0); agents drive the rest.
 import { Game, verbName, V } from './game.js';
 import { Renderer, PLAYER_COLOR } from './render.js';
+import { Assets } from './assets.js';
 import { RandomAgent } from './agent.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,8 +16,8 @@ const state = {
   bannerUntil: 0,
 };
 
-const game = await Game.load();
-const renderer = new Renderer($('board'), game);
+const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
+const renderer = new Renderer($('board'), game, assets);
 const agent = new RandomAgent();
 game.newGame((Math.random() * 2 ** 31) | 0);
 
@@ -94,12 +95,17 @@ function refreshPanel() {
 function countBits(x) { let n = 0; while (x) { n += x & 1; x >>>= 1; } return n; }
 
 function showResult() {
-  const w = game.result(0) === 0 ? 0 : 1;
   const el = $('banner');
-  el.textContent = state.mode === 'human'
-    ? (w === 0 ? 'you win!' : 'you lose')
-    : `player ${w + 1} wins`;
-  el.style.color = PLAYER_COLOR[w];
+  if (game.result(0) === 2) {          // Might rules: turn cap = draw
+    el.textContent = 'draw — no capital conquest';
+    el.style.color = '#dfe6ee';
+  } else {
+    const w = game.result(0) === 0 ? 0 : 1;
+    el.textContent = state.mode === 'human'
+      ? (w === 0 ? 'you win!' : 'you lose')
+      : `player ${w + 1} wins`;
+    el.style.color = PLAYER_COLOR[w];
+  }
   el.classList.remove('hidden');
   state.bannerUntil = performance.now() + 2500;
 }
