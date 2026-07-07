@@ -148,6 +148,8 @@ typedef struct {
     float shaping;           // legacy generic score-delta coefficient (0 = off:
                              // Tribes score rewards temples/parks — anti-domination)
     float draw_penalty;      // subtracted from BOTH players on a stall/cap draw
+    float speed_bonus;       // terminal multiplier: ±(1 + sb*(1 - turns/max_turns));
+                             // faster conquest pays more (mirrored on the loser)
     float reward_city;       // per city gained/lost (captures transfer value)
     float reward_kill;       // per star-cost of units killed (favorable trades)
     float reward_explore;    // per fog tile revealed
@@ -413,9 +415,13 @@ static inline bool env_exec(PolyEnv* e, const PolyAction* proto) {
 // stall end is a DRAW — reward 0, final_result INCOMPLETE for both.
 static inline void env_end_episode(PolyEnv* e) {
     bool domination = e->game.won_by_domination;
+    // speed multiplier: winning at turn 30/200 pays ~1.42x, at turn 190 ~1.02x
+    float tick_frac = (float)(e->game.tick > e->game.max_turns ? e->game.max_turns : e->game.tick)
+                      / (float)e->game.max_turns;
+    float magnitude = 1.0f + e->speed_bonus * (1.0f - tick_frac);
     for (int a = 0; a < ENV_PLAYERS; a++) {
         if (domination) {
-            *e->reward_ptr[a] += e->game.players[a].result == RESULT_WIN ? 1.0f : -1.0f;
+            *e->reward_ptr[a] += e->game.players[a].result == RESULT_WIN ? magnitude : -magnitude;
             e->final_result[a] = (int8_t)e->game.players[a].result;
         } else {
             *e->reward_ptr[a] -= e->draw_penalty;     // stalling hurts both sides

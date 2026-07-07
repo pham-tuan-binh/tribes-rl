@@ -1,6 +1,0 @@
-# Asset generation pipeline
-openai>=1.40.0        # gpt-image-1 (images.generate / images.edit)
-pillow>=10.0.0        # trim / center / resize / recolor
-numpy>=1.24.0         # recolor math
-rembg>=2.0.50         # local background-removal cleanup pass (U^2-Net)
-onnxruntime>=1.16.0   # rembg backend

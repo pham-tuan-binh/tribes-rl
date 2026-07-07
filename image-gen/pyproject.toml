@@ -1,0 +1,28 @@
+[project]
+name = "polytopia-image-gen"
+version = "0.1.0"
+description = "Realistic Age-of-Empires-style asset pack pipeline (gpt-image-1 + rembg)"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "openai>=1.40.0",  # gpt-image-1 (images.generate / images.edit)
+    "pillow>=10.0.0",  # trim / center / resize / recolor
+    "numpy>=1.24.0",   # recolor math
+]
+
+# Optional: local background-removal cleanup pass. gpt-image-1 already emits a
+# transparent background, so rembg is a safety net, not required. Its dep chain
+# (onnxruntime/numba) is heavy — install only if you need it:
+#   uv sync --extra rembg
+[project.optional-dependencies]
+rembg = [
+    "rembg>=2.0.65",
+    "onnxruntime>=1.16.0",
+    # rembg -> pymatting -> numba; without floors uv backtracks to numba 0.53
+    # (needs numpy<1.24, no py3.12 wheels). Pin the modern chain.
+    "numba>=0.59",
+    "llvmlite>=0.42",
+]
+
+[tool.uv]
+package = false

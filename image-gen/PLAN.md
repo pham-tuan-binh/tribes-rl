@@ -85,7 +85,7 @@ Two L1 conventions worth calling out:
 - **Terrain** uses `TECH_TILE` (full-bleed, seamless) instead of the sprite
   cut-out block.
 
-`python generate.py --dry-run` prints every composed prompt for review before
+`uv run generate.py --dry-run` prints every composed prompt for review before
 spending anything.
 
 ---
@@ -163,7 +163,7 @@ terrain re-skinning, not free sprites.
 image-gen/
   PLAN.md                 ← this document
   README.md               ← quickstart / flags
-  requirements.txt        ← openai, pillow, numpy, rembg
+  pyproject.toml          ← uv project + deps (openai, pillow, numpy, rembg)
   .env.example            ← OPENAI_API_KEY (the only config)
   generate.py             ← CLI: compose → gpt-image-1 → cutout → finish → install
   prompts/

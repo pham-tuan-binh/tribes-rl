@@ -7,27 +7,38 @@ prompt hierarchy.
 
 ## Setup
 
+Uses [uv](https://docs.astral.sh/uv/). It creates the env and installs deps on
+first `uv run` — no manual venv step.
+
 ```bash
 cd image-gen
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync                       # create env + install deps (optional; uv run does it too)
 cp .env.example .env          # put your OPENAI_API_KEY in it
 ```
 
 That API key is the only thing you configure.
 
+`gpt-image-1` already outputs transparent backgrounds, so the local `rembg`
+cleanup pass is optional. To enable it, install the extra and pass `--extra`:
+
+```bash
+uv run --extra rembg generate.py --only warrior --bg always
+```
+
+Without it, the pipeline trusts the model's transparency (and says so).
+
 ## Sample a few and eyeball them
 
 ```bash
-python generate.py --dry-run                 # print the composed prompts, $0
-python generate.py --only warrior farm fish  # generate 3 assets
+uv run generate.py --dry-run                 # print the composed prompts, $0
+uv run generate.py --only warrior farm fish  # generate 3 assets
 open out/sprites                             # review the results
 ```
 
 Nothing touches `web/assets/` until you explicitly install:
 
 ```bash
-python generate.py --install                 # copy out/sprites/ -> web/assets/
+uv run generate.py --install                 # copy out/sprites/ -> web/assets/
 ```
 
 Then reload the web client (`web/serve.py`) to see them in-game.
@@ -35,11 +46,11 @@ Then reload the web client (`web/serve.py`) to see them in-game.
 ## Common runs
 
 ```bash
-python generate.py --group building          # a whole category
-python generate.py --group unit              # all units (+ auto team-recolor)
-python generate.py --only knight --fidelity high   # hug the original silhouette
-python generate.py --limit 5                 # first 5 of the default set
-python generate.py --group terrain           # phase-2, seamless tiles (see PLAN)
+uv run generate.py --group building          # a whole category
+uv run generate.py --group unit              # all units (+ auto team-recolor)
+uv run generate.py --only knight --fidelity high   # hug the original silhouette
+uv run generate.py --limit 5                 # first 5 of the default set
+uv run generate.py --group terrain           # phase-2, seamless tiles (see PLAN)
 ```
 
 ## What you get

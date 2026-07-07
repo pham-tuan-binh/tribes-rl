@@ -29,8 +29,14 @@ def _already_cut_out(img: Image.Image, thresh: int = 8) -> bool:
     return (sum(edge) / len(edge)) < thresh
 
 
-def _rembg(png_bytes: bytes) -> bytes:
-    from rembg import remove  # lazy: keep --dry-run import-free
+def _rembg(png_bytes: bytes) -> bytes | None:
+    """Run rembg if the optional dep is installed; else None (graceful skip)."""
+    try:
+        from rembg import remove  # lazy: keep --dry-run / core install import-free
+    except ImportError:
+        print("      (rembg not installed — trusting gpt-image-1 transparency; "
+              "`uv sync --extra rembg` to enable the cleanup pass)")
+        return None
     return remove(png_bytes)
 
 
@@ -40,6 +46,8 @@ def cutout(png_bytes: bytes, mode: str = "auto") -> bytes:
     mode="auto"   run rembg only if the border isn't already transparent
     mode="always" always run rembg
     mode="never"  trust the model's transparency, no-op
+
+    If rembg isn't installed, falls back to the model's own transparency.
     """
     if mode not in _MODES:
         raise ValueError(f"mode must be one of {_MODES}")
@@ -49,4 +57,4 @@ def cutout(png_bytes: bytes, mode: str = "auto") -> bytes:
         img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
         if _already_cut_out(img):
             return png_bytes
-    return _rembg(png_bytes)
+    return _rembg(png_bytes) or png_bytes

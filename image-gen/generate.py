@@ -2,12 +2,12 @@
 """Asset generation pipeline — compose prompt -> gpt-image-1 -> cutout -> finish.
 
 Quick start (see README.md):
-    pip install -r requirements.txt
+    uv sync                 # or let `uv run` do it on first call
     cp .env.example .env    # put your OPENAI_API_KEY in it
-    python generate.py --dry-run                 # print prompts, spend nothing
-    python generate.py --only warrior knight     # gen a couple to eyeball
-    python generate.py --group building          # a whole category
-    python generate.py --install                 # copy finished sprites into web/assets
+    uv run generate.py --dry-run                 # print prompts, spend nothing
+    uv run generate.py --only warrior knight     # gen a couple to eyeball
+    uv run generate.py --group building          # a whole category
+    uv run generate.py --install                 # copy finished sprites into web/assets
 
 Per asset the flow is:
     manifest subject + style layers  ->  full prompt
@@ -155,7 +155,7 @@ def main():
             time.sleep(0.3)  # gentle on rate limits
     if not args.dry_run:
         print(f"\ndone: {ok}/{len(assets)} generated -> {SPRITES.relative_to(HERE)}/")
-        print("review them, then:  python generate.py --install")
+        print("review them, then:  uv run generate.py --install")
 
 
 if __name__ == "__main__":
