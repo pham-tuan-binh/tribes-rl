@@ -481,7 +481,10 @@ static inline bool exec_build(PolyState* s, int ci, int tile, BuildingType b) {
     city_building_effects(s, ci, tile, b, false, false);
     if (b == BUILDING_PORT) poly_set_net_tile(s, tile, true);
     if (BUILDING_INFO[b].is_monument) s->players[c->owner].monuments[b - 12] = MONUMENT_BUILT;
-    if (b == BUILDING_LUMBER_HUT) s->terrain[tile] = TERRAIN_PLAIN;
+    if (b == BUILDING_LUMBER_HUT) {
+        s->terrain[tile] = TERRAIN_PLAIN;
+        s->grown[tile] = 0;   // grow -> lumber hut is legitimate economy
+    }
     return true;
 }
 
@@ -569,16 +572,25 @@ static inline bool exec_forest_op(PolyState* s, int ci, int tile, ActKind kind) 
         case ACT_CLEAR_FOREST:      // note: resource is NOT cleared (Java quirk)
             s->terrain[tile] = TERRAIN_PLAIN;
             p->stars += CLEAR_FOREST_STAR;
+            if (s->grown[tile]) {   // undoing a grown forest = wasted stars
+                p->stars_wasted += GROW_FOREST_COST;
+                s->grown[tile] = 0;
+            }
             break;
         case ACT_BURN_FOREST:
             s->terrain[tile] = TERRAIN_PLAIN;
             s->resource[tile] = RESOURCE_CROPS;
             p->stars -= BURN_FOREST_COST;
+            if (s->grown[tile]) {
+                p->stars_wasted += GROW_FOREST_COST;
+                s->grown[tile] = 0;
+            }
             break;
         case ACT_GROW_FOREST:
             s->terrain[tile] = TERRAIN_FOREST;
             s->resource[tile] = RESOURCE_NONE;
             p->stars -= GROW_FOREST_COST;
+            s->grown[tile] = 1;
             break;
         default: return false;
     }

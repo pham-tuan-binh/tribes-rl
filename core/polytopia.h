@@ -65,6 +65,11 @@ typedef struct {
     int32_t lost_value;         // summed star-cost of own units lost (any cause,
                                 // incl. disband — prevents the disband-to-deny-
                                 // kill-reward exploit)
+    int32_t stars_wasted;       // stars burned in do-undo cycles (e.g. grow->clear
+                                // forest) — reward shaping charges these directly
+    int32_t capitals_taken;     // enemy original capitals captured (multiplayer's
+                                // key intermediate objective)
+    int32_t capitals_lost;
     // fog of war: bitset over tiles, kept even in full-obs mode
     uint8_t obs[(MAX_TILES + 7) / 8];
 } Player;
@@ -77,6 +82,8 @@ typedef struct {
     int16_t unit_at[MAX_TILES];     // unit index, -1 = empty
     int8_t city_at[MAX_TILES];      // owning city index (border), -1 = unowned
     uint8_t net_tile[MAX_TILES];    // Java TradeNetwork.networkTiles: roads, ports, city centers
+    uint8_t grown[MAX_TILES];       // forest was GROWN here (reward accounting: clearing or
+                                    // burning a grown forest is star waste; a lumber hut redeems it)
     // temple levels/counters, parallel to building plane (0 unless temple there)
     int8_t temple_level[MAX_TILES];
     int8_t temple_turns[MAX_TILES];
@@ -1006,6 +1013,10 @@ static inline int poly_capture(PolyState* s, int player, int x, int y) {
         // Tribe.capturedCity: transfer + building effects for the new owner
         player_add_city(s, player, ci);      // sets c->owner = player
         player_remove_city(s, prev_owner, ci);
+        if (c->is_capital) {                 // reward accounting
+            s->players[player].capitals_taken++;
+            s->players[prev_owner].capitals_lost++;
+        }
         for (int bt = 0; bt < s->size * s->size; bt++)
             if (s->city_at[bt] == ci && s->building[bt] != BUILDING_NONE)
                 city_building_effects(s, ci, bt, (BuildingType)s->building[bt], false, true);

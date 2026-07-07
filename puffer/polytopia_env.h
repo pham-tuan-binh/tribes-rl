@@ -98,6 +98,9 @@ typedef struct {
     float ticks;            // game turns per episode
     float p0_winrate;       // domination wins by player 0
     float draw_rate;        // games ended by turn cap / stall (no capitals win)
+    float wins;             // domination-ended episodes
+    float win_ticks;        // summed game turns of domination wins
+                            // (avg turns-to-win = win_ticks / wins)
     float slot_0_score;     // outcome of agent slot 0 (primary in match/selfplay)
     float slot_1_score;
     float hist_score;       // primary outcome sums on opponent-pool (tagged) envs
@@ -157,6 +160,10 @@ typedef struct {
     float reward_kill;       // per star-cost of units killed (favorable trades)
     float reward_explore;    // per fog tile revealed
     float reward_prod;       // per point of income growth (real economy, not score)
+    float reward_waste;      // per star burned in do-undo cycles (grow->clear forest
+                             // etc.) — the "road-spam class" of null actions
+    float reward_capital;    // per enemy capital captured / own capital lost —
+                             // the key intermediate objective in multiplayer
     int fog;                 // partial observability (fog of war)
     int32_t prev_score[ENV_PLAYERS];
     int32_t prev_cities[ENV_PLAYERS];
@@ -164,6 +171,9 @@ typedef struct {
     int32_t prev_lostval[ENV_PLAYERS];
     int32_t prev_seen[ENV_PLAYERS];
     int32_t prev_prod[ENV_PLAYERS];
+    int32_t prev_waste[ENV_PLAYERS];
+    int32_t prev_caps_taken[ENV_PLAYERS];
+    int32_t prev_caps_lost[ENV_PLAYERS];
     int32_t episode_steps;
     int32_t max_episode_steps;
     uint32_t rng;            // env-level rng (map seeds, tribe picks)
@@ -368,6 +378,9 @@ static inline void env_new_game(PolyEnv* e) {
         e->prev_lostval[p] = e->game.players[p].lost_value;
         e->prev_seen[p] = e->game.players[p].tiles_seen;
         e->prev_prod[p] = env_income(&e->game, p);
+        e->prev_waste[p] = e->game.players[p].stars_wasted;
+        e->prev_caps_taken[p] = e->game.players[p].capitals_taken;
+        e->prev_caps_lost[p] = e->game.players[p].capitals_lost;
     }
     env_refresh_legal(e);
 }
@@ -453,6 +466,10 @@ static inline void env_end_episode(PolyEnv* e) {
     e->log.ticks += (float)e->game.tick;
     e->log.p0_winrate += domination && e->game.players[0].result == RESULT_WIN ? 1.0f : 0.0f;
     e->log.draw_rate += domination ? 0.0f : 1.0f;
+    if (domination) {
+        e->log.wins += 1.0f;
+        e->log.win_ticks += (float)e->game.tick;
+    }
     e->log.n += 1.0f;
     env_new_game(e);
 }
@@ -606,6 +623,17 @@ static inline void poly_env_step(PolyEnv* e) {
             int32_t d_prod = inc - e->prev_prod[a];
             if (d_prod != 0) r += e->reward_prod * (float)d_prod;       // real economy growth
             e->prev_prod[a] = inc;
+
+            int32_t d_waste = p->stars_wasted - e->prev_waste[a];       // do-undo star burn
+            if (d_waste > 0) r -= e->reward_waste * (float)d_waste;
+            e->prev_waste[a] = p->stars_wasted;
+
+            // capitals: the decisive intermediate objective (+taken, -lost)
+            int32_t d_ct = p->capitals_taken - e->prev_caps_taken[a];
+            int32_t d_cl = p->capitals_lost - e->prev_caps_lost[a];
+            if (d_ct || d_cl) r += e->reward_capital * (float)(d_ct - d_cl);
+            e->prev_caps_taken[a] = p->capitals_taken;
+            e->prev_caps_lost[a] = p->capitals_lost;
 
             // legacy generic score shaping (default 0: score pays for
             // temples/parks, which is anti-domination)

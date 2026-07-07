@@ -47,6 +47,12 @@ void my_init(Env* env, Dict* kwargs) {
     env->turn_penalty = 0.003f;
     if ((it = dict_get_unsafe(kwargs, "turn_penalty")) != NULL)
         env->turn_penalty = (float)it->value;
+    env->reward_waste = 0.02f;
+    if ((it = dict_get_unsafe(kwargs, "reward_waste")) != NULL)
+        env->reward_waste = (float)it->value;
+    env->reward_capital = 0.3f;
+    if ((it = dict_get_unsafe(kwargs, "reward_capital")) != NULL)
+        env->reward_capital = (float)it->value;
     env->reward_city = 0.05f;
     if ((it = dict_get_unsafe(kwargs, "reward_city")) != NULL)
         env->reward_city = (float)it->value;
@@ -74,6 +80,8 @@ void my_log(Log* log, Dict* out) {
     dict_set(out, "ticks", log->ticks);
     dict_set(out, "p0_winrate", log->p0_winrate);
     dict_set(out, "draw_rate", log->draw_rate);
+    dict_set(out, "wins", log->wins);
+    dict_set(out, "win_ticks", log->win_ticks);   // avg turns-to-win = win_ticks/wins
     dict_set(out, "slot_0_score", log->slot_0_score);
     dict_set(out, "slot_1_score", log->slot_1_score);
     dict_set(out, "hist_score", log->hist_score);

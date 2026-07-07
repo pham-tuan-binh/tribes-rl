@@ -55,16 +55,33 @@ EMSCRIPTEN_KEEPALIVE int poly_fog_enabled(void) { return E.game.fog ? 1 : 0; }
 static Weights* WEIGHTS = NULL;
 static PufferNet* NET[ENV_PLAYERS];
 static uint32_t agent_rng = 0xC0FFEE;
+static float agent_temperature = 0.5f;   // <1 suppresses low-probability junk actions
+static int net_hidden = 0, net_layers = 0;
+
+// exact float count of a checkpoint for a given architecture (all tensor
+// sizes here are multiples of 8, so the 16-byte alignment adds no padding)
+static int arch_floats(int hidden, int layers) {
+    return hidden * POLY_OBS_SIZE + (ACTION_N + 1) * hidden + layers * 3 * hidden * hidden;
+}
 
 static void nets_rebuild(void) {
     if (!WEIGHTS) return;
+    // auto-detect architecture from the checkpoint size
+    const int H[] = {512, 768, 1024};
+    const int L[] = {3, 4, 3};
+    net_hidden = 0;
+    for (int c = 0; c < 3; c++)
+        if (arch_floats(H[c], L[c]) == WEIGHTS->size - 7) { net_hidden = H[c]; net_layers = L[c]; }
+    if (!net_hidden) { net_hidden = 512; net_layers = 3; }   // last resort
     int logit_sizes[1] = {ACTION_N};
     for (int s = 0; s < ENV_PLAYERS; s++) {
         if (NET[s]) free_puffernet(NET[s]);
         WEIGHTS->idx = 0;
-        NET[s] = make_puffernet(WEIGHTS, 1, POLY_OBS_SIZE, 512, 3, logit_sizes, 1);
+        NET[s] = make_puffernet(WEIGHTS, 1, POLY_OBS_SIZE, net_hidden, net_layers, logit_sizes, 1);
     }
 }
+
+EMSCRIPTEN_KEEPALIVE void poly_set_temperature(float t) { agent_temperature = t > 0.05f ? t : 0.05f; }
 
 // JS: buf = poly_weights_alloc(nbytes); HEAPU8.set(binData, buf); poly_weights_load(nbytes)
 static uint8_t* weights_staging = NULL;
@@ -106,7 +123,7 @@ EMSCRIPTEN_KEEPALIVE int poly_agent_act(int player) {
     if (mx == -1e30f) return -1;
     float sum = 0.0f, probs[ACTION_N];
     for (int i = 0; i < ACTION_N; i++) {
-        probs[i] = mask[i] ? expf(logits[i] - mx) : 0.0f;
+        probs[i] = mask[i] ? expf((logits[i] - mx) / agent_temperature) : 0.0f;
         sum += probs[i];
     }
     float r = (float)poly_rand(&agent_rng) / 2147483648.0f * sum;
