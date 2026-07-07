@@ -23,6 +23,15 @@ The trained policy runs client-side via puffernet (a small C inference lib vendo
 
 The bridge auto-detects the network architecture from the file size and samples actions with temperature 0.5 by default (`poly_set_temperature` to change it).
 
+## Deploy (GitHub Pages)
+
+The site is fully static, so `.github/workflows/pages.yml` deploys it on every
+push to `main`: CI builds the WASM engine with emscripten and publishes the
+`web/` directory. Weights are committed in `weights/`, so no build step touches
+them. In the repo settings, set Pages > Source to "GitHub Actions" once.
+
+All URLs are relative, so it works at any path (`user.github.io/tribes-rl/`).
+
 ## Layout
 
 - `wasm/bridge.c`: the exported C ABI (new game / mask / act / agent inference / state accessors)

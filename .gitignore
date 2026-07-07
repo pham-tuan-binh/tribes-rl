@@ -9,7 +9,8 @@ build/
 *.wasm
 core/tests/bin/
 
-# Web
+# Web (dist/ is rebuilt by web/build.sh, incl. by the Pages workflow;
+# web/weights/ IS committed: the static site serves the policy from there)
 web/node_modules/
 web/dist/
 
@@ -21,5 +22,3 @@ __pycache__/
 # OS/editor
 .DS_Store
 traces/
-web/dist/
-web/weights/

@@ -1,0 +1,43 @@
+# Deploy the website to GitHub Pages. The site is fully static: the C engine
+# builds to WASM here in CI, and the trained policy weights are committed in
+# web/weights/ and served as plain files.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'core/**', 'puffer/polytopia_env.h', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.61
+      - name: Build WASM engine + asset manifest
+        run: ./web/build.sh
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
