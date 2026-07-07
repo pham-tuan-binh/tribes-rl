@@ -72,6 +72,7 @@ export class Game {
     g.income = f('poly_income', 'number', ['number']);
     g.tribe = f('poly_tribe', 'number', ['number']);
     g.techs = f('poly_techs', 'number', ['number']);
+    g.techCost = f('poly_tech_cost', 'number', ['number', 'number']);
     g.unitAt = f('poly_unit_at', 'number', ['number']);
     g.unitType = f('poly_unit_type', 'number', ['number']);
     g.unitOwner = f('poly_unit_owner', 'number', ['number']);

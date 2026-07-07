@@ -90,7 +90,10 @@ function rebuildPanel() {
     if (v === V.END_TURN || !m[game.tiles + v]) continue;
     any = true;
     const b = document.createElement('button');
-    b.textContent = verbName(v);
+    let label = verbName(v);
+    if (v >= V.RESEARCH0 && v < V.RESEARCH0 + 24)
+      label += ` ★${game.techCost(0, v - V.RESEARCH0)}`;
+    b.textContent = label;
     b.onclick = () => { game.act(game.tiles + v); if (game.gameOver()) showResult(); };
     btns.appendChild(b);
   }

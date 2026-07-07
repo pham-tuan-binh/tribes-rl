@@ -152,6 +152,10 @@ EMSCRIPTEN_KEEPALIVE int poly_score(int player) { return E.game.players[player].
 EMSCRIPTEN_KEEPALIVE int poly_income(int player) { return env_income(&E.game, player); }
 EMSCRIPTEN_KEEPALIVE int poly_tribe(int player) { return E.game.players[player].tribe; }
 EMSCRIPTEN_KEEPALIVE unsigned poly_techs(int player) { return E.game.players[player].techs; }
+EMSCRIPTEN_KEEPALIVE int poly_tech_cost(int player, int tech) {
+    const Player* p = &E.game.players[player];
+    return tech_cost((Tech)tech, p->num_cities, tech_researched(p, TECH_PHILOSOPHY));
+}
 
 // units: JS iterates tiles; per-tile unit info packed on demand
 EMSCRIPTEN_KEEPALIVE int poly_unit_at(int tile) { return E.game.unit_at[tile]; }

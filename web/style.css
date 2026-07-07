@@ -1,42 +1,166 @@
+/* polytopia-rl — warm tabletop minimalism.
+   Design tokens borrowed from flower-and-bolt: Inter, cosmic-latte, and the
+   flower (pink) / bolt (amber) accent pair mapping to Human / Agents modes. */
+:root {
+  --latte: #FFFBF0;
+  --latte-deep: #f4ecdb;
+  --ink: #1f2430;
+  --ink-soft: #6b7280;
+  --line: #e8dfc9;
+  --flower: #ec4899;      /* human mode */
+  --bolt: #f59e0b;        /* agents mode */
+  --go: #16a34a;
+  --card: #ffffff;
+  --shadow: 0 10px 30px rgba(96, 78, 39, .14), 0 2px 6px rgba(96, 78, 39, .08);
+  --r: 14px;
+}
+
 * { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
 body {
-  background: #10141a; color: #dfe6ee;
-  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1200px 700px at 30% -10%, #fffef9 0%, var(--latte) 55%, var(--latte-deep) 100%);
+  color: var(--ink);
+  font: 15px/1.5 Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh;
 }
-main { display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; justify-content: center; }
+
+main {
+  display: flex; gap: 28px; padding: 28px;
+  flex-wrap: wrap; align-items: flex-start; justify-content: center;
+}
+
+/* ---- board as a game on the table ---- */
 #board-wrap { position: relative; }
-canvas { background: #0a0d11; border-radius: 8px; max-width: 90vw; height: auto; }
+canvas {
+  display: block;
+  background: radial-gradient(closest-side, #fdf6e5 40%, #f7eed7 75%, #efe3c8 100%);
+  border-radius: 22px;
+  box-shadow: var(--shadow), inset 0 0 60px rgba(96, 78, 39, .06);
+  max-width: min(92vw, 78vh);
+  height: auto;
+}
 #banner {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 28px; background: rgba(10,13,17,.75); border-radius: 8px; pointer-events: none;
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 34px Fredoka, Inter, sans-serif;
+  letter-spacing: .5px;
+  background: rgba(255, 251, 240, .82);
+  backdrop-filter: blur(3px);
+  border-radius: 22px;
+  pointer-events: none;
 }
-#panel { width: 280px; display: flex; flex-direction: column; gap: 12px; }
-h1 { font-size: 18px; font-weight: 600; }
-h2 { font-size: 13px; font-weight: 600; opacity: .8; }
-.row { display: flex; gap: 8px; align-items: center; }
+
+/* ---- panel ---- */
+#panel { width: 320px; display: flex; flex-direction: column; gap: 14px; }
+
+header h1 {
+  font: 700 26px Fredoka, Inter, sans-serif;
+  letter-spacing: .3px;
+}
+header h1 .accent { color: var(--bolt); }
+.tagline { color: var(--ink-soft); font-size: 12.5px; margin-top: 1px; }
+
+/* segmented mode control */
+.seg {
+  display: flex; background: var(--latte-deep);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px;
+}
+.seg-btn {
+  flex: 1; border: 0; background: transparent; border-radius: 999px;
+  font: 600 14px Inter, sans-serif; color: var(--ink-soft);
+  padding: 8px 0; cursor: pointer; transition: all .18s ease;
+}
+#mode-agents.active { background: var(--bolt); color: #fff; box-shadow: 0 2px 8px rgba(245, 158, 11, .35); }
+#mode-human.active { background: var(--flower); color: #fff; box-shadow: 0 2px 8px rgba(236, 72, 153, .35); }
+
+/* cards */
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 12px 14px;
+  box-shadow: 0 2px 10px rgba(96, 78, 39, .06);
+}
+.row { display: flex; gap: 10px; align-items: center; }
+.row + .row { margin-top: 10px; }
+.row label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+
 button {
-  background: #1d2632; color: #dfe6ee; border: 1px solid #2c3a4c; border-radius: 6px;
-  padding: 6px 12px; font: inherit; cursor: pointer;
+  font: 600 13.5px Inter, sans-serif;
+  background: var(--latte); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 13px; cursor: pointer;
+  transition: transform .08s ease, box-shadow .12s ease, background .12s ease;
 }
-button:hover { background: #263242; }
-button.mode.active { background: #2e4a6b; border-color: #3f6a9b; }
-button.primary { background: #2e6b4a; border-color: #3f9b6a; }
-button:disabled { opacity: .4; cursor: default; }
-input[type=range] { flex: 1; }
-#status { opacity: .85; min-height: 1.4em; }
-.player-card { padding: 4px 6px; border-radius: 4px; margin: 3px 0; }
-.player-card.active-turn { outline: 1px solid #4a637f; }
-.player-card summary { cursor: pointer; font-size: 11px; opacity: .65; margin-top: 2px; }
-.tech-tree { margin: 4px 0 2px; }
-.tech-row { display: flex; flex-wrap: wrap; gap: 3px; margin: 3px 0; }
+button:hover { background: #fff; box-shadow: 0 2px 8px rgba(96, 78, 39, .12); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: .38; cursor: default; transform: none; box-shadow: none; }
+button.primary {
+  background: var(--go); color: #fff; border-color: transparent;
+  box-shadow: 0 3px 10px rgba(22, 163, 74, .3);
+}
+button.primary:hover { background: #15803d; }
+
+/* slider */
+input[type=range] {
+  flex: 1; appearance: none; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--line), var(--bolt));
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; border: 2.5px solid var(--bolt);
+  box-shadow: 0 1px 4px rgba(96, 78, 39, .3); cursor: grab;
+}
+.pill {
+  font: 600 11.5px Inter, sans-serif; color: var(--ink-soft);
+  background: var(--latte-deep); border-radius: 999px; padding: 3px 9px;
+  min-width: 52px; text-align: center;
+}
+
+#status { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+
+/* player cards */
+.player-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 10px 13px;
+  box-shadow: 0 2px 10px rgba(96, 78, 39, .06);
+  border-left: 4px solid var(--pc, var(--ink-soft));
+  transition: box-shadow .15s ease;
+}
+.player-card + .player-card { margin-top: 8px; }
+.player-card.active-turn { box-shadow: 0 0 0 2px var(--pc), 0 2px 10px rgba(96, 78, 39, .1); }
+.player-card.p0 { --pc: #e2413e; }
+.player-card.p1 { --pc: #3f8ee0; }
+.player-card.p2 { --pc: #e0b23f; }
+.player-card.p3 { --pc: #54c96f; }
+.player-head { font: 600 13.5px Inter, sans-serif; }
+.player-card summary {
+  cursor: pointer; font-size: 11.5px; font-weight: 600;
+  color: var(--ink-soft); margin-top: 5px; user-select: none;
+}
+.tech-tree { margin: 7px 0 3px; }
+.tech-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .tech-chip {
-  font-size: 10px; padding: 1px 5px; border-radius: 8px;
-  background: #1a212b; color: #55606e; border: 1px solid #242e3a;
+  font: 500 10.5px Inter, sans-serif; padding: 2px 7px; border-radius: 999px;
+  background: var(--latte-deep); color: #a89f8a; border: 1px solid var(--line);
 }
-.tech-chip.researched { background: #24503a; color: #b9eccb; border-color: #2f7a52; }
+.tech-chip.researched { background: #dcf3e4; color: #166534; border-color: #a7dcbb; }
+
+/* verb sheet */
+#verbs h2 { font: 600 12px Inter, sans-serif; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
 #verb-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-#verb-buttons button { font-size: 12px; padding: 4px 8px; }
-#hint { font-size: 12px; opacity: .6; }
+#verb-buttons button { font-size: 12.5px; padding: 6px 10px; border-radius: 999px; }
+#verb-buttons button:hover { border-color: var(--flower); color: var(--flower); }
+
+#hint { font-size: 12px; color: var(--ink-soft); min-height: 1.5em; }
 .hidden { display: none !important; }
-.p0 { color: #ff7a76; } .p1 { color: #7ab5ff; } .p2 { color: #ffd166; } .p3 { color: #8ef0a0; }
+
+/* board entrance */
+@keyframes settle { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+#board-wrap, #panel > * { animation: settle .5s ease both; }
+#panel > *:nth-child(2) { animation-delay: .05s; }
+#panel > *:nth-child(3) { animation-delay: .1s; }
+#panel > *:nth-child(4) { animation-delay: .15s; }
+#panel > *:nth-child(5) { animation-delay: .2s; }
