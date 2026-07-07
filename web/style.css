@@ -30,7 +30,7 @@ body {
 }
 
 main {
-  display: flex; gap: 108px; padding: 32px;
+  display: flex; gap: 160px; padding: 32px;
   flex-wrap: wrap; align-items: flex-start; justify-content: center;
 }
 
@@ -49,9 +49,10 @@ canvas {
   position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
   font: 500 11px var(--mono);
   letter-spacing: 0.4px;
-  background: var(--text); color: var(--bg);
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--amber);
   padding: 7px 14px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+  box-shadow: 0 6px 24px rgba(96, 78, 39, .16);
   pointer-events: none;
   white-space: nowrap;
   animation: toast-in .18s ease;
@@ -82,8 +83,8 @@ canvas {
 .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 header h1 {
-  font: 600 16px Inter, sans-serif;
-  letter-spacing: .01em;
+  font: 700 26px Inter, sans-serif;
+  letter-spacing: -0.01em;
 }
 header h1 .accent { color: var(--amber); }
 
@@ -136,9 +137,9 @@ button:active { transform: translateY(1px); }
 button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 button:disabled:hover { border-color: var(--border); color: var(--text); }
 button.primary {
-  background: var(--text); color: var(--bg); border-color: var(--text);
+  background: var(--amber); color: #fff; border-color: var(--amber);
 }
-button.primary:hover { background: var(--amber); border-color: var(--amber); color: #fff; }
+button.primary:hover { background: var(--amber-lt); border-color: var(--amber-lt); color: #fff; }
 
 /* slider: thin track + square ink thumb, like the loader bar */
 input[type=range] {
@@ -148,13 +149,13 @@ input[type=range] {
 input[type=range]::-webkit-slider-thumb {
   appearance: none; -webkit-appearance: none;
   width: 12px; height: 12px; border-radius: 0;
-  background: var(--text); border: none; cursor: grab;
+  background: var(--amber); border: none; cursor: grab;
 }
 input[type=range]::-moz-range-thumb {
   width: 12px; height: 12px; border-radius: 0;
-  background: var(--text); border: none; cursor: grab;
+  background: var(--amber); border: none; cursor: grab;
 }
-input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
+input[type=range]:hover::-webkit-slider-thumb { background: var(--amber-lt); }
 .pill {
   font: 500 10px var(--mono); font-variant-numeric: tabular-nums;
   letter-spacing: .4px; text-transform: uppercase;
