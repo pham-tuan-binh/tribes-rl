@@ -120,11 +120,12 @@ function refreshPanel() {
 
 function showResult() {
   const el = $('banner');
-  if (game.result(0) === 2) {
+  let w = -1;
+  for (let p = 0; p < game.players; p++) if (game.result(p) === 0) w = p;
+  if (w < 0) {
     el.textContent = 'draw — no capital conquest';
     el.style.color = '#dfe6ee';
   } else {
-    const w = game.result(0) === 0 ? 0 : 1;
     el.textContent = state.mode === 'human'
       ? (w === 0 ? 'you win!' : 'you lose')
       : `player ${w + 1} wins`;

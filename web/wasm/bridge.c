@@ -123,8 +123,8 @@ EMSCRIPTEN_KEEPALIVE int poly_agent_act(int player) {
 // the next seed instead).
 EMSCRIPTEN_KEEPALIVE int poly_act(int action) {
     int player = E.game.active_player;
-    act_buf[player] = (float)action;
-    act_buf[1 - player] = (float)(ENV_TILES + V_END_TURN);
+    for (int p = 0; p < ENV_PLAYERS; p++)
+        act_buf[p] = (float)(p == player ? action : ENV_TILES + V_END_TURN);  // others PASS
     poly_env_step(&E);
     return term_buf[0] > 0.5f ? 0 : 1;
 }

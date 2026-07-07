@@ -86,11 +86,12 @@ export class Game {
     g.size = f('poly_map_size', 'number', [])();
     g.tiles = g.size * g.size;
     g.actionN = f('poly_action_n', 'number', [])();
-    g.players = 2;
+    g.numPlayers = f('poly_num_players', 'number', []);
+    g.players = 2;   // refreshed after newGame
     return g;
   }
 
-  newGame(seed, fog = true) { this.newGameRaw(seed >>> 0, fog ? 1 : 0); }
+  newGame(seed, fog = true) { this.newGameRaw(seed >>> 0, fog ? 1 : 0); this.players = this.numPlayers(); }
 
   // fresh views each call: WASM memory may grow and detach old buffers
   bytes(ptr, len) { return new Uint8Array(this.m.HEAPU8.buffer, ptr, len); }

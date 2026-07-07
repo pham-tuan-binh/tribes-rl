@@ -40,7 +40,9 @@ static int pick_masked(uint32_t* rng, const unsigned char* mask) {
 static void test_action_space_constants(void) {
     CHECK(ACTION_N == 121 + 76);
     CHECK(V_DESTROY == VERB_N - 1);
-    CHECK(OBS_SIZE == 10 * 121 + 14 + 48);
+#if ENV_PLAYERS == 2
+    CHECK(OBS_SIZE == 10 * 121 + 4 + 2 * (5 + 24));
+#endif
     // verb slots must be disjoint & in range
     CHECK(V_RESEARCH0 + NUM_TECH - 1 < V_BUILD_ROAD + 1);
     CHECK(V_UNIT0 + 9 < V_BUILD0);
@@ -84,7 +86,8 @@ static void test_full_random_episodes(void) {
                 mask_buf[active][ENV_TILES + V_END_TURN])
                 a = ENV_TILES + V_END_TURN;
             act_buf[active] = (float)a;
-            act_buf[1 - active] = (float)(ENV_TILES + V_END_TURN);   // PASS
+            for (int q = 0; q < ENV_PLAYERS; q++)
+                if (q != active) act_buf[q] = (float)(ENV_TILES + V_END_TURN);   // PASS
             poly_env_step(&E);
             steps++;
             if (term_buf[0] > 0.5f) {
@@ -121,7 +124,8 @@ static void test_phase_walkthrough(void) {
     }
     CHECK(sel >= 0);
     act_buf[active] = (float)sel;
-    act_buf[1 - active] = (float)(ENV_TILES + V_END_TURN);
+    for (int q = 0; q < ENV_PLAYERS; q++)
+        if (q != active) act_buf[q] = (float)(ENV_TILES + V_END_TURN);
     poly_env_step(&E);
     CHECK(E.phase == PH_VERB);
     CHECK(mask_buf[active][ENV_TILES + V_UNIT0 + 0]);   // MOVE offered

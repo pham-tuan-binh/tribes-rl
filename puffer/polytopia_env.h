@@ -29,7 +29,9 @@
 
 #define ENV_SIZE 11
 #define ENV_TILES (ENV_SIZE * ENV_SIZE)
-#define ENV_PLAYERS 2
+#ifndef ENV_PLAYERS
+#define ENV_PLAYERS 2      // build-time: 2..4 (obs/action shapes change with it)
+#endif
 
 // ---------------------------------------------------------------------------
 // Action space: [0, ENV_TILES) = tiles; [ENV_TILES, ENV_TILES+VERB_N) = verbs.
@@ -73,7 +75,9 @@ static inline bool verb_needs_target(int kind) {
 // perspective (1 = own, 2 = enemy).
 // ---------------------------------------------------------------------------
 #define OBS_PLANES 10
-#define OBS_GLOBALS (14 + 2 * NUM_TECH)
+// globals: 4 shared + per-player block (5 scalars + tech bits), self first
+#define OBS_PLAYER_BLOCK (5 + NUM_TECH)
+#define OBS_GLOBALS (4 + ENV_PLAYERS * OBS_PLAYER_BLOCK)
 // named POLY_OBS_SIZE so the binding can define the literal OBS_SIZE macro
 // that PufferLib's build tooling scrapes from binding.c
 #define POLY_OBS_SIZE (OBS_PLANES * ENV_TILES + OBS_GLOBALS)
@@ -308,26 +312,25 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     if (e->phase != PH_SELECT && e->sel_tile >= 0) sel[e->sel_tile] = 1;
 
     uint8_t* g = o + OBS_PLANES * ENV_TILES;
-    int opp = 1 - agent;
-    const Player* me = &s->players[agent];
-    const Player* op = &s->players[opp];
     int gi = 0;
     g[gi++] = (uint8_t)e->phase;
     g[gi++] = (uint8_t)(e->phase == PH_TARGET ? 1 + e->pend_kind : 0);
     g[gi++] = agent == s->active_player ? 1 : 0;
-    g[gi++] = (uint8_t)(me->stars > 200 ? 200 : me->stars);
-    g[gi++] = s->fog ? 0 : (uint8_t)(op->stars > 200 ? 200 : op->stars);  // fog hides enemy economy
-    g[gi++] = (uint8_t)(me->score / 50 > 255 ? 255 : me->score / 50);
-    g[gi++] = (uint8_t)(op->score / 50 > 255 ? 255 : op->score / 50);
-    g[gi++] = (uint8_t)s->tick;
-    g[gi++] = (uint8_t)me->num_cities;
-    g[gi++] = (uint8_t)op->num_cities;
-    g[gi++] = (uint8_t)me->num_kills;
-    g[gi++] = (uint8_t)op->num_kills;
-    g[gi++] = (uint8_t)me->tribe;
-    g[gi++] = (uint8_t)op->tribe;
-    for (int t = 0; t < NUM_TECH; t++) g[gi++] = (me->techs >> t) & 1u;
-    for (int t = 0; t < NUM_TECH; t++) g[gi++] = s->fog ? 0 : (op->techs >> t) & 1u;
+    g[gi++] = (uint8_t)(s->tick > 255 ? 255 : s->tick);
+    // seat-relative player blocks: self first, then opponents in seat order.
+    // Fog hides opponents' economy and tech.
+    for (int k = 0; k < ENV_PLAYERS; k++) {
+        int pl = (agent + k) % ENV_PLAYERS;
+        const Player* p = &s->players[pl];
+        bool hide = s->fog && pl != agent;
+        g[gi++] = hide ? 0 : (uint8_t)(p->stars > 200 ? 200 : p->stars);
+        g[gi++] = (uint8_t)(p->score / 50 > 255 ? 255 : p->score / 50);
+        g[gi++] = (uint8_t)p->num_cities;
+        g[gi++] = (uint8_t)p->num_kills;
+        g[gi++] = (uint8_t)(p->result == RESULT_LOSS ? 200 : p->tribe);  // eliminated marker
+        for (int t = 0; t < NUM_TECH; t++)
+            g[gi++] = hide ? 0 : (p->techs >> t) & 1u;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -342,9 +345,9 @@ static inline int env_income(const PolyState* s, int player) {
 }
 
 static inline void env_new_game(PolyEnv* e) {
-    int8_t tribes[2];
-    tribes[0] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
-    tribes[1] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
+    int8_t tribes[ENV_PLAYERS];
+    for (int p = 0; p < ENV_PLAYERS; p++)
+        tribes[p] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
     uint32_t seed = poly_rand(&e->rng) | 1u;
     poly_reset(&e->game, ENV_PLAYERS, tribes, ENV_SIZE, MODE_CAPITALS, seed, e->fog != 0);
     e->phase = PH_SELECT;
@@ -459,8 +462,7 @@ static inline void poly_env_cancel(PolyEnv* e) {
 // One tick: applies the active player's micro-action, updates rewards,
 // terminals, obs and masks for both agents.
 static inline void poly_env_step(PolyEnv* e) {
-    *e->reward_ptr[0] = 0.0f; *e->reward_ptr[1] = 0.0f;
-    *e->terminal_ptr[0] = 0.0f; *e->terminal_ptr[1] = 0.0f;
+    for (int a = 0; a < ENV_PLAYERS; a++) { *e->reward_ptr[a] = 0.0f; *e->terminal_ptr[a] = 0.0f; }
 
     int player = e->game.active_player;
     int act = (int)*e->action_ptr[player];
@@ -557,17 +559,22 @@ static inline void poly_env_step(PolyEnv* e) {
             const Player* p = &e->game.players[a];
             float r = 0.0f;
 
+            // zero-sum transfers are split evenly across opponents
+            const float opp_share = 1.0f / (float)(ENV_PLAYERS - 1);
+
             int32_t d_city = p->num_cities - e->prev_cities[a];
             if (d_city != 0 && e->reward_city != 0.0f) {
                 r += e->reward_city * (float)d_city;                    // gained/lost cities
-                *e->reward_ptr[1 - a] -= e->reward_city * (float)d_city;  // zero-sum transfer
+                for (int o = 0; o < ENV_PLAYERS; o++)
+                    if (o != a) *e->reward_ptr[o] -= e->reward_city * (float)d_city * opp_share;
             }
             e->prev_cities[a] = p->num_cities;
 
             int32_t d_kill = p->kill_value - e->prev_killval[a];
             if (d_kill != 0 && e->reward_kill != 0.0f) {
                 r += e->reward_kill * (float)d_kill;                    // trades by star value
-                *e->reward_ptr[1 - a] -= e->reward_kill * (float)d_kill;
+                for (int o = 0; o < ENV_PLAYERS; o++)
+                    if (o != a) *e->reward_ptr[o] -= e->reward_kill * (float)d_kill * opp_share;
             }
             e->prev_killval[a] = p->kill_value;
 
@@ -585,7 +592,8 @@ static inline void poly_env_step(PolyEnv* e) {
             if (e->shaping != 0.0f) {
                 int32_t d = p->score - e->prev_score[a];
                 r += e->shaping * (float)d;
-                *e->reward_ptr[1 - a] -= e->shaping * (float)d;
+                for (int o = 0; o < ENV_PLAYERS; o++)
+                    if (o != a) *e->reward_ptr[o] -= e->shaping * (float)d * opp_share;
             }
             e->prev_score[a] = p->score;
 
