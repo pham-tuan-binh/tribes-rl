@@ -88,7 +88,8 @@ typedef struct {
     float score;            // final scores summed (avg of both players)
     float episode_length;   // micro-steps per episode
     float ticks;            // game turns per episode
-    float p0_winrate;
+    float p0_winrate;       // domination wins by player 0
+    float draw_rate;        // games ended by turn cap / stall (no capitals win)
     float n;                // episodes accumulated
 } Log;
 
@@ -363,20 +364,25 @@ static inline bool env_exec(PolyEnv* e, const PolyAction* proto) {
     return false;
 }
 
+// Might rules: only capturing all capitals wins (+1/-1). A turn-cap or
+// stall end is a DRAW — reward 0, final_result INCOMPLETE for both.
 static inline void env_end_episode(PolyEnv* e) {
+    bool domination = e->game.won_by_domination;
     for (int a = 0; a < ENV_PLAYERS; a++) {
-        float r = 0.0f;
-        if (e->game.players[a].result == RESULT_WIN) r = 1.0f;
-        else if (e->game.players[a].result == RESULT_LOSS) r = -1.0f;
-        *e->reward_ptr[a] += r;
+        if (domination) {
+            *e->reward_ptr[a] += e->game.players[a].result == RESULT_WIN ? 1.0f : -1.0f;
+            e->final_result[a] = (int8_t)e->game.players[a].result;
+        } else {
+            e->final_result[a] = RESULT_INCOMPLETE;   // draw
+        }
         *e->terminal_ptr[a] = 1.0f;
-        e->final_result[a] = (int8_t)e->game.players[a].result;
     }
     e->boundary_reached = 1;   // selfplay pool episode boundary
     e->log.score += (float)(e->game.players[0].score + e->game.players[1].score) / 2.0f;
     e->log.episode_length += (float)e->episode_steps;
     e->log.ticks += (float)e->game.tick;
-    e->log.p0_winrate += e->game.players[0].result == RESULT_WIN ? 1.0f : 0.0f;
+    e->log.p0_winrate += domination && e->game.players[0].result == RESULT_WIN ? 1.0f : 0.0f;
+    e->log.draw_rate += domination ? 0.0f : 1.0f;
     e->log.n += 1.0f;
     env_new_game(e);
 }

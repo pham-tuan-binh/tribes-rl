@@ -89,10 +89,13 @@ static void test_full_random_episodes(void) {
             steps++;
             if (term_buf[0] > 0.5f) {
                 done = true;
-                // exactly one +1 and one -1 (no draws in CAPITALS with ranking)
-                CHECK((rew_buf[0] > 0.5f && rew_buf[1] < -0.5f) ||
-                      (rew_buf[1] > 0.5f && rew_buf[0] < -0.5f));
                 CHECK(term_buf[1] > 0.5f);
+                // Might rules: either a domination win (+1/-1) or a draw (0/0)
+                bool win = (rew_buf[0] > 0.5f && rew_buf[1] < -0.5f) ||
+                           (rew_buf[1] > 0.5f && rew_buf[0] < -0.5f);
+                bool draw = rew_buf[0] == 0.0f && rew_buf[1] == 0.0f &&
+                            E.final_result[0] == RESULT_INCOMPLETE;
+                CHECK(win || draw);
             }
             if (failures) { fprintf(stderr, "  (ep %d, step %ld)\n", episode, steps); return; }
         }

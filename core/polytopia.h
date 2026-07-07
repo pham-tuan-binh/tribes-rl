@@ -93,6 +93,7 @@ typedef struct {
     bool leveling_up;               // a city must pick a level-up bonus now
     int8_t leveling_city;
     bool game_over;
+    bool won_by_domination;         // game ended by all-capitals capture (not turn-cap ranking)
 
     uint32_t rng;                   // xorshift/rand_r state; seeded at reset
 } PolyState;

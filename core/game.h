@@ -91,6 +91,7 @@ static inline void poly_check_game_over(PolyState* s) {
                 for (int o = 0; o < s->num_players; o++)
                     s->players[o].result = o == pl ? RESULT_WIN : RESULT_LOSS;
                 s->game_over = true;
+                s->won_by_domination = true;
                 return;
             }
         }
