@@ -41,6 +41,18 @@ void my_init(Env* env, Dict* kwargs) {
     env->draw_penalty = 0.5f;
     if ((it = dict_get_unsafe(kwargs, "draw_penalty")) != NULL)
         env->draw_penalty = (float)it->value;
+    env->reward_city = 0.05f;
+    if ((it = dict_get_unsafe(kwargs, "reward_city")) != NULL)
+        env->reward_city = (float)it->value;
+    env->reward_kill = 0.01f;
+    if ((it = dict_get_unsafe(kwargs, "reward_kill")) != NULL)
+        env->reward_kill = (float)it->value;
+    env->reward_explore = 0.001f;
+    if ((it = dict_get_unsafe(kwargs, "reward_explore")) != NULL)
+        env->reward_explore = (float)it->value;
+    env->reward_prod = 0.01f;
+    if ((it = dict_get_unsafe(kwargs, "reward_prod")) != NULL)
+        env->reward_prod = (float)it->value;
 
     // distinct per-env rng streams (envs are created sequentially)
     static uint32_t env_counter = 0;

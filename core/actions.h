@@ -295,6 +295,7 @@ static inline bool exec_attack(PolyState* s, int ui, int ti) {
     if (def->hp <= r.to_target) {
         unit_add_kill(atk);
         s->players[atk->owner].num_kills++;
+        s->players[atk->owner].kill_value += UNIT_STATS[def->type].cost;
         int tx = def->x, ty = def->y;
         poly_kill_unit(s, ti);
         if (UNIT_STATS[atk->type].melee_push)
@@ -306,6 +307,7 @@ static inline bool exec_attack(PolyState* s, int ui, int ti) {
             if (atk->hp <= 0) {
                 unit_add_kill(def);
                 s->players[def->owner].num_kills++;
+                s->players[def->owner].kill_value += UNIT_STATS[atk->type].cost;
                 poly_kill_unit(s, ui);
             }
         }

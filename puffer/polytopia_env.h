@@ -140,10 +140,20 @@ typedef struct {
     PolyAction legal[POLY_MAX_ACTIONS];
     int n_legal;
 
-    float shaping;           // score-delta shaping coefficient (0 = off)
+    // --- reward shaping (all small vs the ±1 terminal; see polytopia.ini) ---
+    float shaping;           // legacy generic score-delta coefficient (0 = off:
+                             // Tribes score rewards temples/parks — anti-domination)
     float draw_penalty;      // subtracted from BOTH players on a stall/cap draw
+    float reward_city;       // per city gained/lost (captures transfer value)
+    float reward_kill;       // per star-cost of units killed (favorable trades)
+    float reward_explore;    // per fog tile revealed
+    float reward_prod;       // per point of income growth (real economy, not score)
     int fog;                 // partial observability (fog of war)
     int32_t prev_score[ENV_PLAYERS];
+    int32_t prev_cities[ENV_PLAYERS];
+    int32_t prev_killval[ENV_PLAYERS];
+    int32_t prev_seen[ENV_PLAYERS];
+    int32_t prev_prod[ENV_PLAYERS];
     int32_t episode_steps;
     int32_t max_episode_steps;
     uint32_t rng;            // env-level rng (map seeds, tribe picks)
@@ -323,6 +333,14 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
 // ---------------------------------------------------------------------------
 // Reset / step
 // ---------------------------------------------------------------------------
+static inline int env_income(const PolyState* s, int player) {
+    int prod = 0;
+    const Player* p = &s->players[player];
+    for (int k = 0; k < p->num_cities; k++)
+        prod += city_production(&s->cities[p->city_list[k]]);
+    return prod;
+}
+
 static inline void env_new_game(PolyEnv* e) {
     int8_t tribes[2];
     tribes[0] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
@@ -333,8 +351,13 @@ static inline void env_new_game(PolyEnv* e) {
     e->sel_unit = -1; e->sel_city = -1; e->sel_tile = -1;
     e->pend_kind = -1; e->pend_arg = -1;
     e->episode_steps = 0;
-    e->prev_score[0] = e->game.players[0].score;
-    e->prev_score[1] = e->game.players[1].score;
+    for (int p = 0; p < ENV_PLAYERS; p++) {
+        e->prev_score[p] = e->game.players[p].score;
+        e->prev_cities[p] = e->game.players[p].num_cities;
+        e->prev_killval[p] = e->game.players[p].kill_value;
+        e->prev_seen[p] = e->game.players[p].tiles_seen;
+        e->prev_prod[p] = env_income(&e->game, p);
+    }
     env_refresh_legal(e);
 }
 
@@ -528,13 +551,45 @@ static inline void poly_env_step(PolyEnv* e) {
 
     e->episode_steps++;
 
-    // score-delta shaping (zero-sum)
-    if (e->shaping != 0.0f && !e->game.game_over) {
+    // --- tactical reward shaping (domination-aligned; see field comments) ---
+    if (!e->game.game_over) {
         for (int a = 0; a < ENV_PLAYERS; a++) {
-            int32_t d = e->game.players[a].score - e->prev_score[a];
-            *e->reward_ptr[a] += e->shaping * (float)d;
-            *e->reward_ptr[1 - a] -= e->shaping * (float)d;
-            e->prev_score[a] = e->game.players[a].score;
+            const Player* p = &e->game.players[a];
+            float r = 0.0f;
+
+            int32_t d_city = p->num_cities - e->prev_cities[a];
+            if (d_city != 0 && e->reward_city != 0.0f) {
+                r += e->reward_city * (float)d_city;                    // gained/lost cities
+                *e->reward_ptr[1 - a] -= e->reward_city * (float)d_city;  // zero-sum transfer
+            }
+            e->prev_cities[a] = p->num_cities;
+
+            int32_t d_kill = p->kill_value - e->prev_killval[a];
+            if (d_kill != 0 && e->reward_kill != 0.0f) {
+                r += e->reward_kill * (float)d_kill;                    // trades by star value
+                *e->reward_ptr[1 - a] -= e->reward_kill * (float)d_kill;
+            }
+            e->prev_killval[a] = p->kill_value;
+
+            int32_t d_seen = p->tiles_seen - e->prev_seen[a];
+            if (d_seen > 0) r += e->reward_explore * (float)d_seen;     // exploration
+            e->prev_seen[a] = p->tiles_seen;
+
+            int32_t inc = env_income(&e->game, a);
+            int32_t d_prod = inc - e->prev_prod[a];
+            if (d_prod != 0) r += e->reward_prod * (float)d_prod;       // real economy growth
+            e->prev_prod[a] = inc;
+
+            // legacy generic score shaping (default 0: score pays for
+            // temples/parks, which is anti-domination)
+            if (e->shaping != 0.0f) {
+                int32_t d = p->score - e->prev_score[a];
+                r += e->shaping * (float)d;
+                *e->reward_ptr[1 - a] -= e->shaping * (float)d;
+            }
+            e->prev_score[a] = p->score;
+
+            *e->reward_ptr[a] += r;
         }
     }
 

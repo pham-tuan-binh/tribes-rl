@@ -60,6 +60,8 @@ typedef struct {
     int8_t city_list[MAX_CITIES];
     int8_t num_cities;
     uint64_t connected_cities;  // bitset over city index (trade-connected to capital)
+    int32_t tiles_seen;         // fog tiles revealed (reward shaping)
+    int32_t kill_value;         // summed star-cost of units this player killed
     // fog of war: bitset over tiles, kept even in full-obs mode
     uint8_t obs[(MAX_TILES + 7) / 8];
 } Player;
@@ -588,6 +590,7 @@ static inline bool poly_clear_view(PolyState* s, int player, int x0, int y0, int
         if (!obs_get(p, t)) {
             obs_set(p, t);
             p->score += CLEAR_VIEW_POINTS;
+            p->tiles_seen++;
             if (poly_is_road(s, t) || terrain_is_water((Terrain)s->terrain[t]))
                 net_update = true;
         }
