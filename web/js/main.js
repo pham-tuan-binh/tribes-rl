@@ -27,8 +27,9 @@ async function loadEngine(players) {
   renderer = new Renderer($('board'), game, assets);
   const trained = await game.loadWeights(players);
   agent = trained ? new TrainedAgent() : new RandomAgent();
-  document.title = trained ? 'polytopia-rl' : 'polytopia-rl (random agents)';
+  document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
   game.newGame((Math.random() * 2 ** 31) | 0);
+  state.stepAccum = 0;
   state.panelSig = '';
   tally.wins.fill(0); tally.draws = 0;
   $('banner').classList.add('hidden');
@@ -283,12 +284,16 @@ function frame(now) {
       }
     } else {
       state.stepAccum += aps * dt;
-      // clamp the backlog so a slow frame never causes a huge catch-up burst
-      state.stepAccum = Math.min(state.stepAccum, 400);
+      // never queue more than ~2 frames of work
+      state.stepAccum = Math.min(state.stepAccum, aps * 0.04 + 1);
+      // time-budgeted like max speed: each step is a full policy forward
+      // pass, so an unbudgeted catch-up burst freezes the UI at high rates
+      const budget = performance.now() + 20;
       while (state.stepAccum >= 1) {
         state.stepAccum -= 1;
         stepAgentOnce();
         if (humanTurn()) break;
+        if (performance.now() >= budget) { state.stepAccum = 0; break; }
       }
     }
   }
@@ -317,6 +322,13 @@ function stepAgentOnce() {
 }
 
 // --- controls ---
+// fresh game + cleared sim backlog: mode/players/speed changes all restart
+function resetGame() {
+  game.newGame((Math.random() * 2 ** 31) | 0);
+  state.stepAccum = 0;
+  state.panelSig = '';
+  $('banner').classList.add('hidden');
+}
 $('mode-agents').onclick = () => setMode('agents');
 $('mode-human').onclick = () => setMode('human');
 function setMode(m) {
@@ -325,12 +337,10 @@ function setMode(m) {
   $('mode-human').classList.toggle('active', m === 'human');
   $('speed-row').classList.toggle('hidden', m === 'human');
   $('view-row').classList.toggle('hidden', m === 'human');
-  game.newGame((Math.random() * 2 ** 31) | 0);
-  $('banner').classList.add('hidden');
-  state.panelSig = '';
+  resetGame();
   buildViewSeg();
 }
-$('new-game').onclick = () => { game.newGame((Math.random() * 2 ** 31) | 0); $('banner').classList.add('hidden'); state.panelSig = ''; };
+$('new-game').onclick = () => resetGame();
 $('pause').onclick = () => { state.paused = !state.paused; $('pause').textContent = state.paused ? 'resume' : 'pause'; };
 $('end-turn').onclick = () => {
   if (humanTurn() && game.mask(0)[game.tiles + V.END_TURN]) {
@@ -340,6 +350,8 @@ $('end-turn').onclick = () => {
 };
 const speedInput = $('speed');
 speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').textContent = speedLabel(); };
+// on release: restart the game at the new pace (also drops any sim backlog)
+speedInput.onchange = () => resetGame();
 speedInput.oninput();
 
 // --- bootstrap: all declarations above are live now ---

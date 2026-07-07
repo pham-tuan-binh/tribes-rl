@@ -75,11 +75,6 @@ header h1 {
   letter-spacing: .01em;
 }
 header h1 .accent { color: var(--amber); }
-.tagline {
-  font: 500 10px var(--mono);
-  letter-spacing: 1.2px; text-transform: uppercase;
-  color: var(--mid); margin-top: 4px;
-}
 
 /* segmented controls: sharp, mono, active = inverted ink */
 .seg {
