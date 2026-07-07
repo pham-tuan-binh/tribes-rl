@@ -188,15 +188,16 @@ export class Renderer {
       const t = i * N + j;
       let img;
       if (!seen(t)) img = this.fogTile;
-      else img = this.contextTerrain(terr, i, j, terr[t] === 5 ? 0 : terr[t]);
+      // village (4) & city (5) are upright sprites over a plain ground tile
+      else img = this.contextTerrain(terr, i, j, (terr[t] === 5 || terr[t] === 4) ? 0 : terr[t]);
       this.drawRot(img, j, i, c + 1.5, ctx);
     }
 
-    // 2. city tiles on top of their plain base
+    // 2. village/city sprites on top of their plain base (upright, like buildings)
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const t = i * N + j;
-      if (seen(t) && terr[t] === 5) {
-        this.drawRot(a.terrain[5], j, i, c, ctx);
+      if (seen(t) && (terr[t] === 5 || terr[t] === 4)) {
+        this.drawUpright(a.terrain[terr[t]], j, i, c * 1.1, 0.34, ctx);
         const ci = cityAt[t];
         if (ci >= 0 && g.cityWalls(ci)) this.drawRot(a.misc.walls, j, i, c, ctx);
       }
@@ -289,17 +290,27 @@ export class Renderer {
         const carried = a.unitSprite(0, owner, spent);
         if (carried) ctx.drawImage(carried, x + c / 4, y + c / 4, imgSize / 2, imgSize / 2);
       }
-      // hp text like the reference
-      ctx.fillStyle = '#111';
-      ctx.font = `${Math.round(c / 5)}px sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(`${g.unitHp(u)}/${g.unitMaxHp(u)}`, x + c / 10, y);
-      // owner dot
+      // HP + team in ONE badge: seat-colored box with the current HP,
+      // white-rimmed so it reads on any terrain (style of the city badges)
+      const hp = g.unitHp(u), maxHp = g.unitMaxHp(u);
+      const bh = c * 0.24, bw = Math.max(c * 0.3, bh * 0.6 + String(hp).length * bh * 0.42);
+      const bx = x + imgSize - bw * 0.55, by = y - bh * 0.35;
+      ctx.fillStyle = '#fffbf0';
+      ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
       ctx.fillStyle = PLAYER_COLOR[owner];
-      ctx.beginPath();
-      ctx.arc(x + imgSize - 3, y + 4, c * 0.06, 0, 7);
-      ctx.fill();
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(bh * 0.75)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${hp}`, bx + bw / 2, by + bh / 2 + 1);
+      // damage: thin health bar under the badge, drains left to right
+      if (hp < maxHp) {
+        ctx.fillStyle = 'rgba(23,23,23,.55)';
+        ctx.fillRect(bx, by + bh + 1.5, bw, 3);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(bx, by + bh + 1.5, bw * (hp / maxHp), 3);
+      }
     }
   }
 
