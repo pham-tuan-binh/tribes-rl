@@ -24,6 +24,9 @@ let game, renderer, agent;
 
 async function loadEngine(players) {
   game = await Game.load(players);
+  // observe every applied action (agent AND human) for the shared log
+  const rawAct = game.act;
+  game.act = (a) => { logAction(game.activePlayer(), a, game.phase()); return rawAct(a); };
   renderer = new Renderer($('board'), game, assets);
   const trained = await game.loadWeights(players);
   agent = trained ? new TrainedAgent() : new RandomAgent();
@@ -32,6 +35,7 @@ async function loadEngine(players) {
   state.stepAccum = 0;
   state.panelSig = '';
   tally.wins.fill(0); tally.draws = 0;
+  clearLog();
   $('banner').classList.add('hidden');
   buildPlayersSeg();
   buildViewSeg();
@@ -55,6 +59,53 @@ function buildPlayersSeg() {
 }
 
 state.players = 2;   // engine loads at the bottom, after all declarations
+
+// --- shared action log: every applied action (agent or human) becomes a line.
+// Buffered here and flushed to the DOM with the panel (10Hz), so max-speed
+// play never thrashes layout. Tile SELECTs are noise and are skipped.
+const LOG_CAP = 80;
+const logBuf = [];
+let logDirty = false;
+let logPendingVerb = null;   // verb name awaiting its TARGET tile
+function pushLog(html) {
+  logBuf.push(html);
+  if (logBuf.length > LOG_CAP) logBuf.shift();
+  logDirty = true;
+}
+// verbs that go through a TARGET phase (mirrors verb_needs_target in the env)
+function verbNeedsTarget(v) {
+  return v === V.BUILD_ROAD || (v >= V.BUILD0 && v < V.BUILD0 + 19) ||
+    (v >= V.GATHER && v <= V.DESTROY) ||
+    v === V.UNIT0 || v === V.UNIT0 + 1 || v === V.UNIT0 + 5;   // move, attack, convert
+}
+function logAction(p, a, phase) {
+  const tag = `<b class="lp${p}">p${p + 1}</b>`;
+  if (a >= game.tiles) {
+    const v = a - game.tiles;
+    if (v === V.END_TURN && phase === 0) {
+      pushLog(`${tag} end turn <span class="turn">· t${game.tick() + 1}</span>`);
+      return;
+    }
+    const name = verbName(v);
+    if (verbNeedsTarget(v)) { logPendingVerb = name; return; }
+    pushLog(`${tag} ${name}`);
+  } else if (phase === 2) {   // PH_TARGET: tile completes the pending verb
+    pushLog(`${tag} ${logPendingVerb || 'action'} → ${a % game.size},${(a / game.size) | 0}`);
+    logPendingVerb = null;
+  }
+}
+function flushLog() {
+  if (!logDirty) return;
+  logDirty = false;
+  const el = $('log-lines');
+  el.innerHTML = logBuf.join('<br>');
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog() {
+  logBuf.length = 0;
+  logPendingVerb = null;
+  logDirty = true;
+}
 
 // --- speed mapping: 0 -> 0.5 actions/s ... 100 -> unthrottled ---
 function actionsPerSecond() {
@@ -305,6 +356,7 @@ function frame(now) {
   if (now - lastPanel > 100 || humanTurn()) {   // panel at 10Hz; instant for humans
     lastPanel = now;
     refreshPanel();
+    flushLog();
   }
   renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
   requestAnimationFrame(frame);
@@ -327,6 +379,7 @@ function resetGame() {
   game.newGame((Math.random() * 2 ** 31) | 0);
   state.stepAccum = 0;
   state.panelSig = '';
+  clearLog();
   $('banner').classList.add('hidden');
 }
 $('mode-agents').onclick = () => setMode('agents');

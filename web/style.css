@@ -186,6 +186,25 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
 }
 .tech-chip.researched { color: var(--amber); border-color: var(--amber); }
 
+/* shared action log */
+#log h2 {
+  font: 600 10px var(--mono);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--mid); margin-bottom: 8px;
+}
+#log-lines {
+  font: 400 10px/1.7 var(--mono); font-variant-numeric: tabular-nums;
+  letter-spacing: .2px; color: var(--mid);
+  max-height: 160px; overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#log-lines b { font-weight: 600; }
+#log-lines .lp0 { color: #e2413e; }
+#log-lines .lp1 { color: #3f8ee0; }
+#log-lines .lp2 { color: #c99a2a; }
+#log-lines .lp3 { color: #3da55a; }
+#log-lines .turn { color: var(--cloudy); }
+
 /* verb sheet */
 #verbs h2 {
   font: 600 10px var(--mono);
