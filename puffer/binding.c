@@ -44,6 +44,9 @@ void my_init(Env* env, Dict* kwargs) {
     env->speed_bonus = 0.5f;
     if ((it = dict_get_unsafe(kwargs, "speed_bonus")) != NULL)
         env->speed_bonus = (float)it->value;
+    env->turn_penalty = 0.003f;
+    if ((it = dict_get_unsafe(kwargs, "turn_penalty")) != NULL)
+        env->turn_penalty = (float)it->value;
     env->reward_city = 0.05f;
     if ((it = dict_get_unsafe(kwargs, "reward_city")) != NULL)
         env->reward_city = (float)it->value;

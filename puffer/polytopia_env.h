@@ -150,6 +150,9 @@ typedef struct {
     float draw_penalty;      // subtracted from BOTH players on a stall/cap draw
     float speed_bonus;       // terminal multiplier: ±(1 + sb*(1 - turns/max_turns));
                              // faster conquest pays more (mirrored on the loser)
+    float turn_penalty;      // dense time pressure: every game turn costs ALL
+                             // players this much — drives convergence to short games
+    int32_t prev_tick;
     float reward_city;       // per city gained/lost (captures transfer value)
     float reward_kill;       // per star-cost of units killed (favorable trades)
     float reward_explore;    // per fog tile revealed
@@ -357,6 +360,7 @@ static inline void env_new_game(PolyEnv* e) {
     e->sel_unit = -1; e->sel_city = -1; e->sel_tile = -1;
     e->pend_kind = -1; e->pend_arg = -1;
     e->episode_steps = 0;
+    e->prev_tick = 0;
     for (int p = 0; p < ENV_PLAYERS; p++) {
         e->prev_score[p] = e->game.players[p].score;
         e->prev_cities[p] = e->game.players[p].num_cities;
@@ -560,6 +564,13 @@ static inline void poly_env_step(PolyEnv* e) {
     }
 
     e->episode_steps++;
+
+    // dense time pressure: each elapsed game turn costs every player
+    if (!e->game.game_over && e->turn_penalty != 0.0f && e->game.tick > e->prev_tick) {
+        float cost = e->turn_penalty * (float)(e->game.tick - e->prev_tick);
+        for (int a = 0; a < ENV_PLAYERS; a++) *e->reward_ptr[a] -= cost;
+        e->prev_tick = e->game.tick;
+    }
 
     // --- tactical reward shaping (domination-aligned; see field comments) ---
     if (!e->game.game_over) {

@@ -206,10 +206,12 @@ export class Renderer {
       const y = p.y - imgSize / 1.5;
       const owner = g.unitOwner(u);
       const spent = g.unitStatus(u) === 5;
-      const img = a.unitSprite(type, g.tribe(owner), spent);
+      // sprites are keyed by SEAT color (new art pack: 4 team colors), so a
+      // unit's color always matches its player's UI color
+      const img = a.unitSprite(type, owner, spent);
       if (img) ctx.drawImage(img, x, y, imgSize, imgSize);
       if (type >= 8 && type <= 10) {   // naval: mini carried land unit
-        const carried = a.unitSprite(0, g.tribe(owner), spent);
+        const carried = a.unitSprite(0, owner, spent);
         if (carried) ctx.drawImage(carried, x + c / 4, y + c / 4, imgSize / 2, imgSize / 2);
       }
       // hp text like the reference
