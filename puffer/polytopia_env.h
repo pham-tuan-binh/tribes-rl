@@ -511,7 +511,7 @@ static inline void poly_env_step(PolyEnv* e) {
         env_end_episode(e);
     } else if (e->episode_steps >= e->max_episode_steps) {
         // stall guard: force end-of-game ranking by current score
-        e->game.tick = (int16_t)(e->game.max_turns + 1);
+        e->game.tick = e->game.max_turns + 1;
         poly_check_game_over(&e->game);
         env_end_episode(e);
     }
