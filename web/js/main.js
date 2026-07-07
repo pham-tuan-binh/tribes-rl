@@ -4,7 +4,7 @@
 import { Game, verbName, V } from './game.js';
 import { Renderer, PLAYER_COLOR } from './render.js';
 import { Assets } from './assets.js';
-import { RandomAgent } from './agent.js';
+import { RandomAgent, TrainedAgent } from './agent.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,7 +19,9 @@ const state = {
 
 const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
 const renderer = new Renderer($('board'), game, assets);
-const agent = new RandomAgent();
+const trained = await game.loadWeights('weights/latest.bin');
+const agent = trained ? new TrainedAgent() : new RandomAgent();
+document.title = trained ? 'polytopia-rl' : 'polytopia-rl (random agents)';
 game.newGame((Math.random() * 2 ** 31) | 0);
 
 // --- speed mapping: 0 -> 0.5 actions/s ... 100 -> unthrottled ---

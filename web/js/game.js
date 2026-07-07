@@ -51,6 +51,10 @@ export class Game {
     g.visible = f('poly_visible', 'number', ['number', 'number']);
     g.cancel = f('poly_cancel', null, []);
     g.act = f('poly_act', 'number', ['number']);
+    g.agentAct = f('poly_agent_act', 'number', ['number']);
+    g.hasAgent = f('poly_has_agent', 'number', []);
+    g.weightsAlloc = f('poly_weights_alloc', 'number', ['number']);
+    g.weightsLoad = f('poly_weights_load', 'number', ['number']);
     g.maskPtr = f('poly_mask', 'number', ['number']);
     g.terrainPtr = f('poly_terrain', 'number', []);
     g.resourcePtr = f('poly_resource', 'number', []);
@@ -103,5 +107,19 @@ export class Game {
     const m = this.mask(player), out = [];
     for (let i = 0; i < this.actionN; i++) if (m[i]) out.push(i);
     return out;
+  }
+
+  // fetch trained weights (native trainer .bin); returns true on success
+  async loadWeights(url) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return false;
+      const data = new Uint8Array(await resp.arrayBuffer());
+      const ptr = this.weightsAlloc(data.length);
+      this.m.HEAPU8.set(data, ptr);
+      return this.weightsLoad(data.length) === 1;
+    } catch {
+      return false;
+    }
   }
 }

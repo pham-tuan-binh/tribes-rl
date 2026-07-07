@@ -9,9 +9,12 @@
 //   poly_obs(player)  -> ptr to OBS_SIZE bytes (for agent inference in JS)
 //   plus direct state accessors for rendering.
 #include <emscripten/emscripten.h>
+#include <stdlib.h>
 #include "../../puffer/polytopia_env.h"
+#include "puffernet.h"   // vendored from PufferLib (MIT) — C inference for the trained policy
 
 static PolyEnv E;
+static void nets_rebuild(void);   // defined with the inference section below
 static uint8_t obs_buf[ENV_PLAYERS][POLY_OBS_SIZE];
 static float act_buf[ENV_PLAYERS];
 static float rew_buf[ENV_PLAYERS];
@@ -35,6 +38,7 @@ EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed, int fog) {
     E.max_episode_steps = 1 << 30;   // product rules: no practical stop
     E.rng = seed ? seed : 1;
     poly_env_reset(&E);
+    nets_rebuild();   // fresh recurrent state per game
 }
 
 // per-player visibility for fog rendering (1 = tile explored)
@@ -42,6 +46,77 @@ EMSCRIPTEN_KEEPALIVE int poly_visible(int player, int tile) {
     return E.game.fog ? (obs_get(&E.game.players[player], tile) ? 1 : 0) : 1;
 }
 EMSCRIPTEN_KEEPALIVE int poly_fog_enabled(void) { return E.game.fog ? 1 : 0; }
+
+// ---------------------------------------------------------------------------
+// Trained-policy inference (puffernet). Weights = the native trainer's .bin
+// checkpoint (flat float32, tensors 16-byte aligned): encoder w, decoder w,
+// then MinGRU projections. One net per seat (independent recurrent state).
+// ---------------------------------------------------------------------------
+static Weights* WEIGHTS = NULL;
+static PufferNet* NET[ENV_PLAYERS];
+static uint32_t agent_rng = 0xC0FFEE;
+
+static void nets_rebuild(void) {
+    if (!WEIGHTS) return;
+    int logit_sizes[1] = {ACTION_N};
+    for (int s = 0; s < ENV_PLAYERS; s++) {
+        if (NET[s]) free_puffernet(NET[s]);
+        WEIGHTS->idx = 0;
+        NET[s] = make_puffernet(WEIGHTS, 1, POLY_OBS_SIZE, 512, 3, logit_sizes, 1);
+    }
+}
+
+// JS: buf = poly_weights_alloc(nbytes); HEAPU8.set(binData, buf); poly_weights_load(nbytes)
+static uint8_t* weights_staging = NULL;
+EMSCRIPTEN_KEEPALIVE uint8_t* poly_weights_alloc(int nbytes) {
+    free(weights_staging);
+    weights_staging = (uint8_t*)malloc((size_t)nbytes);
+    return weights_staging;
+}
+EMSCRIPTEN_KEEPALIVE int poly_weights_load(int nbytes) {
+    size_t num_floats = (size_t)nbytes / sizeof(float);
+    free(WEIGHTS);
+    WEIGHTS = (Weights*)calloc(1, sizeof(Weights) + (num_floats + 7) * sizeof(float));
+    WEIGHTS->data = (float*)(WEIGHTS + 1);
+    memcpy(WEIGHTS->data, weights_staging, num_floats * sizeof(float));
+    WEIGHTS->size = (int)num_floats + 7;
+    free(weights_staging);
+    weights_staging = NULL;
+    nets_rebuild();
+    return NET[0] != NULL;
+}
+EMSCRIPTEN_KEEPALIVE int poly_has_agent(void) { return WEIGHTS != NULL; }
+
+// Forward pass for one seat with the CURRENT obs + mask; masked softmax
+// sample over the policy logits. Returns an action index, or -1 if no weights.
+EMSCRIPTEN_KEEPALIVE int poly_agent_act(int player) {
+    if (!WEIGHTS || !NET[player]) return -1;
+    PufferNet* net = NET[player];
+    for (int i = 0; i < POLY_OBS_SIZE; i++)
+        net->obs[i] = (float)obs_buf[player][i];   // raw bytes, as in training
+    linear(net->encoder, net->obs);
+    mingru(net->mingru, net->encoder->output);
+    linear(net->decoder, net->mingru->output);
+    const float* logits = net->decoder->output;    // [0..ACTION_N), value at [ACTION_N]
+    const unsigned char* mask = mask_buf[player];
+
+    float mx = -1e30f;
+    for (int i = 0; i < ACTION_N; i++)
+        if (mask[i] && logits[i] > mx) mx = logits[i];
+    if (mx == -1e30f) return -1;
+    float sum = 0.0f, probs[ACTION_N];
+    for (int i = 0; i < ACTION_N; i++) {
+        probs[i] = mask[i] ? expf(logits[i] - mx) : 0.0f;
+        sum += probs[i];
+    }
+    float r = (float)poly_rand(&agent_rng) / 2147483648.0f * sum;
+    for (int i = 0; i < ACTION_N; i++) {
+        r -= probs[i];
+        if (mask[i] && r <= 0.0f) return i;
+    }
+    for (int i = ACTION_N - 1; i >= 0; i--) if (mask[i]) return i;
+    return -1;
+}
 
 // Apply one micro-action for the active player. Returns 1 while the game is
 // running, 0 once it ended (the env auto-resets; call poly_new_game to control

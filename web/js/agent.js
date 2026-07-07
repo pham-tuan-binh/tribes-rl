@@ -14,5 +14,11 @@ export class RandomAgent {
   }
 }
 
-// TODO(M3): PuffernetAgent — forward pass of exported .bin weights, either via
-// puffernet.h compiled into the WASM module or a small JS reimplementation.
+// Trained policy: puffernet forward pass inside the WASM module (masked
+// softmax sampling over the same 197-action head used in training).
+export class TrainedAgent {
+  pick(game, player) {
+    const a = game.agentAct(player);
+    return a >= 0 ? a : null;
+  }
+}
