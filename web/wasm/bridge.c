@@ -149,6 +149,7 @@ EMSCRIPTEN_KEEPALIVE int poly_game_over(void) { return E.game.game_over ? 1 : 0;
 EMSCRIPTEN_KEEPALIVE int poly_result(int player) { return E.final_result[player]; }
 EMSCRIPTEN_KEEPALIVE int poly_stars(int player) { return E.game.players[player].stars; }
 EMSCRIPTEN_KEEPALIVE int poly_score(int player) { return E.game.players[player].score; }
+EMSCRIPTEN_KEEPALIVE int poly_income(int player) { return env_income(&E.game, player); }
 EMSCRIPTEN_KEEPALIVE int poly_tribe(int player) { return E.game.players[player].tribe; }
 EMSCRIPTEN_KEEPALIVE unsigned poly_techs(int player) { return E.game.players[player].techs; }
 

@@ -1,7 +1,7 @@
 // polytopia-rl website: two modes.
 //   Agents — agents play each other; speed slider from slow-mo to unthrottled.
 //   Human  — you are red (player 0); agents drive the rest.
-import { Game, verbName, V } from './game.js';
+import { Game, verbName, V, TECHS } from './game.js';
 import { Renderer, PLAYER_COLOR } from './render.js';
 import { Assets } from './assets.js';
 import { RandomAgent, TrainedAgent } from './agent.js';
@@ -97,6 +97,52 @@ function rebuildPanel() {
   box.classList.toggle('hidden', !any);
 }
 
+// player panel: stable DOM built once per game (so the tech-tree <details>
+// expansion state survives); values updated in place every frame
+const playerEls = [];
+// tech tiers for the tree layout (indices into TECHS)
+const TECH_TIERS = [
+  [0, 1, 2, 3, 4],                          // climbing fishing hunting organization riding
+  [5, 6, 7, 8, 9, 10, 11, 12, 13, 14],      // tier 2
+  [15, 16, 17, 18, 19, 20, 21, 22, 23],     // tier 3
+];
+
+function buildPlayersPanel() {
+  const box = $('players');
+  box.innerHTML = '';
+  playerEls.length = 0;
+  for (let p = 0; p < game.players; p++) {
+    const d = document.createElement('div');
+    d.className = `player-card p${p}`;
+    const head = document.createElement('div');
+    head.className = 'player-head';
+    const det = document.createElement('details');
+    const sum = document.createElement('summary');
+    sum.textContent = 'tech tree';
+    det.appendChild(sum);
+    const tree = document.createElement('div');
+    tree.className = 'tech-tree';
+    const chips = [];
+    for (const tier of TECH_TIERS) {
+      const row = document.createElement('div');
+      row.className = 'tech-row';
+      for (const t of tier) {
+        const c = document.createElement('span');
+        c.className = 'tech-chip';
+        c.textContent = TECHS[t];
+        row.appendChild(c);
+        chips[t] = c;
+      }
+      tree.appendChild(row);
+    }
+    det.appendChild(tree);
+    d.appendChild(head);
+    d.appendChild(det);
+    box.appendChild(d);
+    playerEls.push({ card: d, head, chips });
+  }
+}
+
 function refreshPanel() {
   const sig = panelSignature();
   if (sig !== state.panelSig) {
@@ -106,13 +152,15 @@ function refreshPanel() {
   const active = game.activePlayer();
   $('status').textContent =
     `turn ${game.tick()}  ·  ${humanTurn() ? 'YOUR TURN' : `player ${active + 1} thinking`}`;
-  const box = $('players');
-  box.innerHTML = '';
+  if (playerEls.length !== game.players) buildPlayersPanel();
   for (let p = 0; p < game.players; p++) {
-    const d = document.createElement('div');
-    d.className = `p${p}` + (p === active ? ' active-turn' : '');
-    d.textContent = `p${p + 1}  ★${game.stars(p)}  score ${game.score(p)}`;
-    box.appendChild(d);
+    const el = playerEls[p];
+    el.card.classList.toggle('active-turn', p === active);
+    el.head.textContent =
+      `p${p + 1}  ★${game.stars(p)}  +${game.income(p)}/turn  ·  score ${game.score(p)}`;
+    const bits = game.techs(p) >>> 0;
+    for (let t = 0; t < 24; t++)
+      el.chips[t].classList.toggle('researched', ((bits >> t) & 1) === 1);
   }
   $('hint').textContent = humanTurn() ? PHASE_HINT[game.phase()] :
     state.mode === 'human' ? '' : 'agents are playing';

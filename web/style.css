@@ -25,8 +25,16 @@ button.primary { background: #2e6b4a; border-color: #3f9b6a; }
 button:disabled { opacity: .4; cursor: default; }
 input[type=range] { flex: 1; }
 #status { opacity: .85; min-height: 1.4em; }
-#players div { padding: 3px 6px; border-radius: 4px; margin: 2px 0; }
-#players .active-turn { outline: 1px solid #4a637f; }
+.player-card { padding: 4px 6px; border-radius: 4px; margin: 3px 0; }
+.player-card.active-turn { outline: 1px solid #4a637f; }
+.player-card summary { cursor: pointer; font-size: 11px; opacity: .65; margin-top: 2px; }
+.tech-tree { margin: 4px 0 2px; }
+.tech-row { display: flex; flex-wrap: wrap; gap: 3px; margin: 3px 0; }
+.tech-chip {
+  font-size: 10px; padding: 1px 5px; border-radius: 8px;
+  background: #1a212b; color: #55606e; border: 1px solid #242e3a;
+}
+.tech-chip.researched { background: #24503a; color: #b9eccb; border-color: #2f7a52; }
 #verb-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 #verb-buttons button { font-size: 12px; padding: 4px 8px; }
 #hint { font-size: 12px; opacity: .6; }
