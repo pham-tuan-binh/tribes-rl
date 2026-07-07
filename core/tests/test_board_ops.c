@@ -184,17 +184,17 @@ static void test_push(void) {
     board_reset(9);
     mk_city(0, 4, 4, true);
     int u = mk_unit(UNIT_WARRIOR, 0, 4, 4, 0);
-    // South (dy=+1) is tried first
+    // Java's first push candidate is col+1 (their y+1; their x is the row)
     CHECK(poly_push_unit(&S, u));
-    CHECK(S.units[u].x == 4 && S.units[u].y == 5);
+    CHECK(S.units[u].x == 5 && S.units[u].y == 4);
     CHECK(S.units[u].status == STATUS_PUSHED);
-    // blocked south -> west next
+    // blocked -> second candidate is row-1
     board_reset(9);
     mk_city(0, 4, 4, true);
     u = mk_unit(UNIT_WARRIOR, 0, 4, 4, 0);
-    mk_unit(UNIT_WARRIOR, 0, 4, 5, -1);
+    mk_unit(UNIT_WARRIOR, 0, 5, 4, -1);
     CHECK(poly_push_unit(&S, u));
-    CHECK(S.units[u].x == 3 && S.units[u].y == 4);
+    CHECK(S.units[u].x == 4 && S.units[u].y == 3);
     // fully surrounded and no options -> not pushed (caller removes it)
     board_reset(9);
     mk_city(0, 4, 4, true);

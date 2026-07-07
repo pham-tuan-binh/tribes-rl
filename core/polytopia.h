@@ -250,9 +250,14 @@ static inline void unit_transition(Unit* u, TurnStatus to) {
             if (to == STATUS_ATTACKED && (s == STATUS_FRESH || s == STATUS_MOVED)) u->status = STATUS_FINISHED;
             break;
         case UNIT_RIDER:
+            // Java quirk (Unit.java:172-177): the rider block is sequential
+            // NON-else ifs re-reading the mutated status, so a MOVED
+            // transition from ATTACKED cascades ATTACKED -> MOVED_AND_ATTACKED
+            // -> FINISHED in one call. Attack-then-move ends the rider's turn;
+            // only move -> attack -> move gets the full Escape.
             if (to == STATUS_MOVED && s == STATUS_FRESH) u->status = STATUS_MOVED;
-            else if (to == STATUS_MOVED && s == STATUS_ATTACKED) u->status = STATUS_MOVED_AND_ATTACKED;
-            else if (to == STATUS_MOVED && s == STATUS_MOVED_AND_ATTACKED) u->status = STATUS_FINISHED;
+            else if (to == STATUS_MOVED && (s == STATUS_ATTACKED || s == STATUS_MOVED_AND_ATTACKED))
+                u->status = STATUS_FINISHED;
             else if (to == STATUS_ATTACKED && s == STATUS_FRESH) u->status = STATUS_ATTACKED;
             else if (to == STATUS_ATTACKED && s == STATUS_MOVED) u->status = STATUS_MOVED_AND_ATTACKED;
             break;
@@ -752,11 +757,15 @@ static inline void poly_move_unit(PolyState* s, int ui, int x, int y) {
 
 // Board.embark/disembark — Java replaces the actor; we morph in place,
 // preserving HP/kills/veteran/city and stashing the land type in `carried`.
+// Java quirk kept: the replacement unit has constructor status FINISHED, and
+// any pending status transition (MoveCommand's MOVED, pushUnit's PUSHED)
+// lands on the detached old object — so the new unit stays FINISHED.
 static inline void poly_embark(PolyState* s, int ui, int x, int y) {
     Unit* u = &s->units[ui];
     s->unit_at[tile_idx(s, u->x, u->y)] = -1;
     u->carried = u->type;
     u->type = UNIT_BOAT;
+    u->status = STATUS_FINISHED;
     u->x = (int8_t)x; u->y = (int8_t)y;
     s->unit_at[tile_idx(s, x, y)] = (int16_t)ui;
 }
@@ -765,16 +774,19 @@ static inline void poly_disembark(PolyState* s, int ui, int x, int y) {
     s->unit_at[tile_idx(s, u->x, u->y)] = -1;
     u->type = u->carried >= 0 ? u->carried : UNIT_WARRIOR;  // Java fallback
     u->carried = UNIT_NONE;
+    u->status = STATUS_FINISHED;
     u->x = (int8_t)x; u->y = (int8_t)y;
     s->unit_at[tile_idx(s, x, y)] = (int16_t)ui;
 }
 
 // ---------------------------------------------------------------------------
 // Push (Board.pushUnit / tryPush). Push-order arrays verbatim from
-// Board.java:295-296 (S,W,N,E,SW,NW,NE,NE in their axis convention).
+// Board.java:295-296. NOTE Java's Vector2d "x" is the ROW index, so xPush
+// applies to our y and yPush to our x (verified against golden traces:
+// first candidate is col+1, not row+1).
 // ---------------------------------------------------------------------------
-static const int8_t PUSH_DX[8] = {0, -1, 0, 1, -1, -1, 1, 1};
-static const int8_t PUSH_DY[8] = {1, 0, -1, 0, 1, -1, -1, 1};
+static const int8_t PUSH_DY[8] = {0, -1, 0, 1, -1, -1, 1, 1};   // Java xPush (rows)
+static const int8_t PUSH_DX[8] = {1, 0, -1, 0, 1, -1, -1, 1};   // Java yPush (cols)
 
 static inline bool poly_try_push(PolyState* s, int ui, int x, int y) {
     Unit* u = &s->units[ui];
@@ -799,16 +811,19 @@ static inline bool poly_try_push(PolyState* s, int ui, int x, int y) {
 }
 
 // Returns false if the unit could not be pushed anywhere (Java: it vanishes —
-// caller must then remove it). Sets PUSHED status regardless, as in Java.
+// caller must then remove it). Sets PUSHED, except when the push embarked the
+// unit (Java's PUSHED lands on the stale pre-embark object; see poly_embark).
 static inline bool poly_push_unit(PolyState* s, int ui) {
     Unit* u = &s->units[ui];
     int sx = u->x, sy = u->y;
+    bool was_water = UNIT_STATS[u->type].water;
     bool pushed = false;
     for (int i = 0; i < 8 && !pushed; i++) {
         int x = sx + PUSH_DX[i], y = sy + PUSH_DY[i];
         if (in_bounds(s, x, y)) pushed = poly_try_push(s, ui, x, y);
     }
-    u->status = STATUS_PUSHED;
+    if (was_water || !UNIT_STATS[u->type].water)   // no embark happened
+        u->status = STATUS_PUSHED;
     return pushed;
 }
 

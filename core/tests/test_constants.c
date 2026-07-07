@@ -126,9 +126,10 @@ static void test_city_econ(void) {
     CHECK(city_production(&c) == 4);   // level 2 + prod 1 + capital 1
     c.population = -2;
     CHECK(city_production(&c) == -2);  // negative pop short-circuits
-    CHECK(levelup_points(1) == 100);
-    CHECK(levelup_points(2) == 40);    // 50 - 2*5
-    CHECK(levelup_points(4) == 30);
+    // 50 - reachedLevel*5, per option (verified against golden traces)
+    CHECK(LEVELUP_POINTS[LEVELUP_WORKSHOP] == 40);
+    CHECK(LEVELUP_POINTS[LEVELUP_CITY_WALL] == 35);
+    CHECK(LEVELUP_POINTS[LEVELUP_SUPERUNIT] == 25);
 }
 
 static void test_misc_tables(void) {

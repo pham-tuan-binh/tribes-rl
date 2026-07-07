@@ -170,6 +170,14 @@ static inline bool feas_build(const PolyState* s, int ci, int tile, BuildingType
         }
         if (!found) return false;
     }
+    // Uniqueness (Build.isFeasible): SAWMILL/CUSTOMS_HOUSE/WINDMILL/FORGE are
+    // one-per-city. PORT pairs with CUSTOMS_HOUSE but is REPEATABLE in Java.
+    if (b == BUILDING_SAWMILL || b == BUILDING_CUSTOMS_HOUSE ||
+        b == BUILDING_WINDMILL || b == BUILDING_FORGE) {
+        int ntiles = s->size * s->size;
+        for (int t = 0; t < ntiles; t++)
+            if (s->city_at[t] == ci && s->building[t] == b) return false;
+    }
     return true;
 }
 
@@ -260,12 +268,13 @@ static inline bool exec_move(PolyState* s, int ui, int dest) {
     int x = dest % s->size, y = dest / s->size;
     Terrain dest_ter = (Terrain)s->terrain[dest];
     poly_move_unit(s, ui, x, y);
-    if (UNIT_STATS[u->type].water) {
-        if (!terrain_is_water(dest_ter)) poly_disembark(s, ui, x, y);
-    } else if (s->building[dest] == BUILDING_PORT) {
-        poly_embark(s, ui, x, y);
-    }
-    unit_transition(u, STATUS_MOVED);
+    bool morphed = false;   // embark/disembark replace the Java actor: the
+    if (UNIT_STATS[u->type].water) {                 // MOVED transition below
+        if (!terrain_is_water(dest_ter)) { poly_disembark(s, ui, x, y); morphed = true; }
+    } else if (s->building[dest] == BUILDING_PORT) { // hits the stale object,
+        poly_embark(s, ui, x, y); morphed = true;    // leaving the new unit
+    }                                                // FINISHED
+    if (!morphed) unit_transition(u, STATUS_MOVED);
     return true;
 }
 
@@ -479,8 +488,6 @@ static inline bool exec_spawn(PolyState* s, int ci, UnitType ut) {
     return true;
 }
 
-static const int8_t LEVELUP_POINTS_BY_BONUS[NUM_LEVELUP] = {100, 100, 40, 40, 35, 35, 30, 30};
-
 static inline bool exec_levelup(PolyState* s, int ci, LevelUpBonus b) {
     if (!feas_levelup(s, ci, b)) return false;
     City* c = &s->cities[ci];
@@ -489,8 +496,8 @@ static inline bool exec_levelup(PolyState* s, int ci, LevelUpBonus b) {
         if (p->monuments[BUILDING_PARK_OF_FORTUNE - 12] == MONUMENT_UNAVAILABLE)
             p->monuments[BUILDING_PARK_OF_FORTUNE - 12] = MONUMENT_AVAILABLE;
     }
-    p->score += LEVELUP_POINTS_BY_BONUS[b];
-    c->points_worth = (int16_t)(c->points_worth + LEVELUP_POINTS_BY_BONUS[b]);
+    p->score += LEVELUP_POINTS[b];
+    c->points_worth = (int16_t)(c->points_worth + LEVELUP_POINTS[b]);
     c->level++;
     c->population = (int16_t)(c->population - c->population_need);
     c->population_need = (int16_t)(c->level + 1);
@@ -650,14 +657,18 @@ static inline int poly_enumerate_actions(PolyState* s, PolyAction* out, int cap)
     int ntiles = s->size * s->size;
 
     // --- city actions ---
+    // Java computePlayerActions: the FIRST city (in list order) that can level
+    // up locks the whole action set to ONLY its LevelUp choices — no other
+    // city, unit or tribe actions, and EndTurn is infeasible.
     for (int k = 0; k < p->num_cities; k++) {
         int ci = p->city_list[k];
         City* c = &s->cities[ci];
         if (c->population >= c->population_need) {
+            n = 0;
             for (int b = 0; b < NUM_LEVELUP; b++)
                 if (feas_levelup(s, ci, (LevelUpBonus)b))
                     act_push(out, &n, cap, ACT_LEVELUP, ci, -1, b);
-            continue;   // level-up locks this city's other actions
+            return n;
         }
         for (int t = 0; t < ntiles; t++) {
             if (s->city_at[t] != ci) continue;

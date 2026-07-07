@@ -381,8 +381,11 @@ typedef enum {
     NUM_LEVELUP = 8
 } LevelUpBonus;
 
-// Points on level-up: level==1 ? 100 : 50 - level*5  (LevelUpCommand)
-static inline int levelup_points(int level) { return level == 1 ? 100 : 50 - level * 5; }
+// Points on level-up: CITY_LEVEL_UP.getLevelUpPoints() = 50 - reachedLevel*5,
+// where reachedLevel is the option's enum field (WORKSHOP/EXPLORER=2 ...
+// PARK/SUPERUNIT=5). The Java `level==1 ? 100` branch is dead code.
+// Indexed by LevelUpBonus: {40,40,35,35,30,30,25,25}.
+static const int8_t LEVELUP_POINTS[NUM_LEVELUP] = {40, 40, 35, 35, 30, 30, 25, 25};
 
 // ---------------------------------------------------------------------------
 // Actions & misc (TribesConfig.java:189-227)

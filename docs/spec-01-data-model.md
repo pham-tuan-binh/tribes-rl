@@ -147,7 +147,7 @@ Temples: TEMPLE_TURNS_TO_SCORE 3; `TEMPLE_POINTS = {100,50,50,50,150}` awarded a
 ### 1.7 CITY_LEVEL_UP (`Types.java:419`)
 Options by current level (2 choices each): L1→{WORKSHOP, EXPLORER}; L2→{CITY_WALL, RESOURCES}; L3→{POP_GROWTH, BORDER_GROWTH}; L4+→{PARK, SUPERUNIT}.
 Effects (`LevelUpCommand`): WORKSHOP +1 production; EXPLORER launches explorer (15 random steps clearing view); CITY_WALL sets walls; RESOURCES +5 stars; POP_GROWTH +3 pop; BORDER_GROWTH expand border +1 tile; PARK +250 score; SUPERUNIT spawns a SuperUnit (pushes occupant).
-Level-up points: `level==1 ? 100 : 50 - level*5`.
+Level-up points: `50 - reachedLevel*5` where reachedLevel is the option's enum field (WORKSHOP/EXPLORER=2, CITY_WALL/RESOURCES=3, POP/BORDER=4, PARK/SUPERUNIT=5) → 40/35/30/25. (The `level==1 ? 100` branch in `getLevelUpPoints` is dead code — the field is never 1.)
 
 ### 1.8 TURN_STATUS (`Types.java:145`)
 FRESH, MOVED, ATTACKED, MOVED_AND_ATTACKED, PUSHED, FINISHED. Per-unit-type transition rules encode Polytopia's Dash/Escape/Persist/move-or-attack abilities — full state machine in `Unit.canTransitionTo`/`transitionToStatus` (`units/Unit.java:96–188`). Knight's `addKill()` resets status to ATTACKED to allow chained attacks ("Persist").

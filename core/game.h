@@ -62,11 +62,13 @@ static inline void poly_init_turn(PolyState* s) {
         u->status = u->status == STATUS_PUSHED ? STATUS_MOVED : STATUS_FRESH;
     }
 
-    // pacifist counter (ALTAR_OF_PEACE unlock; needs MEDITATION)
+    // pacifist counter (ALTAR_OF_PEACE unlock; needs MEDITATION).
+    // Java quirk kept: Tribe.addPacifistCount has NO already-built guard, so
+    // every 5th consecutive pacifist turn re-arms the Altar — it can be built
+    // multiple times (verified in golden traces).
     if (tech_researched(p, TECH_MEDITATION)) {
         p->pacifist_count++;
-        if (p->pacifist_count == ALTAR_OF_PEACE_TURNS &&
-            p->monuments[BUILDING_ALTAR_OF_PEACE - 12] == MONUMENT_UNAVAILABLE)
+        if (p->pacifist_count == ALTAR_OF_PEACE_TURNS)
             p->monuments[BUILDING_ALTAR_OF_PEACE - 12] = MONUMENT_AVAILABLE;
     }
     poly_check_monuments(s, player);
@@ -118,19 +120,25 @@ static inline void poly_check_game_over(PolyState* s) {
     }
 }
 
-// GameState.endTurn + Game.tick rotation: auto-recover fresh units, check
-// game over, advance to next living player (incrementing tick on wraparound),
-// then run their initTurn.
-static inline void poly_end_turn(PolyState* s) {
+// GameState.endTurn: auto-recover fresh units. Split from the game-over check
+// and rotation so the golden-trace replayer can compare states at Java's
+// exact dump points (endTurn state is dumped BEFORE gameOver runs).
+static inline void poly_end_turn_only(PolyState* s) {
     int player = s->active_player;
     for (int ui = 0; ui < s->num_units; ui++) {
         Unit* u = &s->units[ui];
         if (u->type == UNIT_NONE || u->owner != player) continue;
         if (u->status == STATUS_FRESH && feas_recover(s, ui)) exec_recover(s, ui);
     }
+}
+
+// Game.tick post-turn: game-over evaluation, then rotate to the next living
+// player (tick increments on wraparound).
+static inline void poly_advance_turn(PolyState* s) {
     poly_check_game_over(s);
     if (s->game_over) return;
 
+    int player = s->active_player;
     int next = player;
     for (int i = 0; i < s->num_players; i++) {
         next = (next + 1) % s->num_players;
@@ -138,6 +146,12 @@ static inline void poly_end_turn(PolyState* s) {
     }
     if (next <= player) s->tick++;              // wrapped around: new round
     s->active_player = (int8_t)next;
+}
+
+static inline void poly_end_turn(PolyState* s) {
+    poly_end_turn_only(s);
+    poly_advance_turn(s);
+    if (s->game_over) return;
     poly_init_turn(s);
     if (s->tick > s->max_turns) poly_check_game_over(s);
 }

@@ -80,12 +80,11 @@ static void test_fsm_rider_escape(void) {
     CHECK(u.status == STATUS_MOVED_AND_ATTACKED && unit_can_move(&u) && !unit_can_attack(&u));
     unit_transition(&u, STATUS_MOVED);
     CHECK(u.status == STATUS_FINISHED);
-    // attack first: FRESH -> ATTACKED -> (move) MOVED_AND_ATTACKED -> (move) FINISHED
+    // attack first: the Java cascade quirk finishes the rider on its next move
+    // (verified against golden traces).
     u.status = STATUS_FRESH;
     unit_transition(&u, STATUS_ATTACKED);
     CHECK(u.status == STATUS_ATTACKED && unit_can_move(&u));
-    unit_transition(&u, STATUS_MOVED);
-    CHECK(u.status == STATUS_MOVED_AND_ATTACKED);
     unit_transition(&u, STATUS_MOVED);
     CHECK(u.status == STATUS_FINISHED);
 }
