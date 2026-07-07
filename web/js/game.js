@@ -47,7 +47,8 @@ export class Game {
     const g = new Game();
     g.m = await createPoly();
     const f = (name, ret, args) => g.m.cwrap(name, ret, args);
-    g.newGameRaw = f('poly_new_game', null, ['number']);
+    g.newGameRaw = f('poly_new_game', null, ['number', 'number']);
+    g.visible = f('poly_visible', 'number', ['number', 'number']);
     g.act = f('poly_act', 'number', ['number']);
     g.maskPtr = f('poly_mask', 'number', ['number']);
     g.terrainPtr = f('poly_terrain', 'number', []);
@@ -84,7 +85,7 @@ export class Game {
     return g;
   }
 
-  newGame(seed) { this.newGameRaw(seed >>> 0); }
+  newGame(seed, fog = true) { this.newGameRaw(seed >>> 0, fog ? 1 : 0); }
 
   // fresh views each call: WASM memory may grow and detach old buffers
   bytes(ptr, len) { return new Uint8Array(this.m.HEAPU8.buffer, ptr, len); }

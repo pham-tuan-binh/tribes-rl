@@ -54,6 +54,7 @@ static void test_income_and_rotation(void) {
     int c0 = mk_city(0, 2, 2, true);
     mk_city(1, 6, 6, true);
     poly_begin(&S);
+    S.max_turns = 50;   // bounded games for tests (product rules have no cap)
     CHECK(S.active_player == 0 && S.tick == 0);
     CHECK(S.players[0].stars == INITIAL_STARS);      // tick-0 special
     PolyAction end = {ACT_END_TURN, -1, -1, -1};
@@ -80,6 +81,7 @@ static void test_auto_recover_and_refresh(void) {
     int u = mk_unit(UNIT_WARRIOR, 0, 3, 2, c0, STATUS_FRESH);   // inside own borders
     S.units[u].hp = 5;
     poly_begin(&S);
+    S.max_turns = 50;   // bounded games for tests (product rules have no cap)
     PolyAction end = {ACT_END_TURN, -1, -1, -1};
     CHECK(poly_step(&S, &end));
     CHECK(S.units[u].hp == 9);                       // +2 recover +2 in-borders
@@ -97,6 +99,7 @@ static void test_temple_growth(void) {
     S.building[t] = BUILDING_TEMPLE;
     S.temple_level[t] = 1; S.temple_turns[t] = TEMPLE_TURNS_TO_SCORE;
     poly_begin(&S);
+    S.max_turns = 50;   // bounded games for tests (product rules have no cap)
     int score0 = S.players[0].score;
     PolyAction end = {ACT_END_TURN, -1, -1, -1};
     // 3 full rounds -> temple levels to 2, +50 points
@@ -111,6 +114,7 @@ static void test_capitals_win(void) {
     mk_city(1, 6, 6, true);
     int u = mk_unit(UNIT_WARRIOR, 0, 6, 6, c0, STATUS_FRESH);   // standing on enemy capital
     poly_begin(&S);
+    S.max_turns = 50;   // bounded games for tests (product rules have no cap)
     PolyAction cap = {ACT_CAPTURE, (int16_t)u, -1, -1};
     CHECK(poly_step(&S, &cap));
     CHECK(!S.game_over);                    // Java: game over only at turn end
@@ -144,6 +148,7 @@ static void test_full_random_games(void) {
         mk_unit(UNIT_WARRIOR, 0, 2, 2, c0, STATUS_FRESH);
         mk_unit(UNIT_WARRIOR, 1, 8, 8, c1, STATUS_FRESH);
         poly_begin(&S);
+        S.max_turns = 50;   // bounded games for tests (product rules have no cap)
 
         PolyAction acts[POLY_MAX_ACTIONS];
         long steps = 0;

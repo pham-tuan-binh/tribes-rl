@@ -35,10 +35,12 @@ function speedLabel() {
 function humanTurn() { return state.mode === 'human' && game.activePlayer() === 0 && !game.gameOver(); }
 
 function legalTiles() {
-  const m = game.mask(0), out = [];
-  for (let t = 0; t < game.tiles; t++) if (m[t]) out.push(t);
+  const m = game.mask(0), out = new Set();
+  for (let t = 0; t < game.tiles; t++) if (m[t]) out.add(t);
   return out;
 }
+// Human mode renders from the human's perspective (fog); Agents mode is omniscient.
+function viewer() { return state.mode === 'human' ? 0 : -1; }
 
 function showVerbs() {
   const box = $('verbs'), btns = $('verb-buttons');
@@ -61,17 +63,17 @@ $('board').addEventListener('click', (ev) => {
   if (!humanTurn()) return;
   const rect = ev.target.getBoundingClientRect();
   const scale = $('board').width / rect.width;
-  const ts = renderer.tileSize();
-  const x = Math.floor(((ev.clientX - rect.left) * scale) / ts);
-  const y = Math.floor(((ev.clientY - rect.top) * scale) / ts);
-  const t = y * game.size + x;
-  if (t >= 0 && t < game.tiles && game.mask(0)[t]) { game.act(t); afterAction(); }
+  const { col, row } = renderer.unproject((ev.clientX - rect.left) * scale,
+                                          (ev.clientY - rect.top) * scale);
+  if (col < 0 || row < 0 || col >= game.size || row >= game.size) return;
+  const t = row * game.size + col;
+  if (game.mask(0)[t]) { game.act(t); afterAction(); }
 });
 
 function afterAction() {
   if (game.gameOver()) showResult();
   refreshPanel();
-  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : [] });
+  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
 }
 
 // --- panel ---
@@ -140,7 +142,7 @@ function frame(now) {
     state.bannerUntil = 0;
   }
   refreshPanel();
-  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : [] });
+  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
   requestAnimationFrame(frame);
 }
 

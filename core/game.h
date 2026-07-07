@@ -174,11 +174,16 @@ static inline bool poly_step(PolyState* s, const PolyAction* a) {
 }
 
 // Start a game on an already-built board: player 0 opens at tick 0.
+// Product rules: effectively no turn cap — games run until conquest.
+// Tribes-compat mode keeps the reference caps (golden traces).
+#define PRODUCT_MAX_TURNS 50000   // effectively no cap: games run until conquest
 static inline void poly_begin(PolyState* s) {
     s->tick = 0;
     s->active_player = 0;
     s->game_over = false;
-    s->max_turns = (int16_t)(s->mode == MODE_CAPITALS ? MAX_TURNS_CAPITALS : MAX_TURNS_SCORE);
+    s->max_turns = s->tribes_compat
+        ? (s->mode == MODE_CAPITALS ? MAX_TURNS_CAPITALS : MAX_TURNS_SCORE)
+        : PRODUCT_MAX_TURNS;
     poly_init_turn(s);
 }
 

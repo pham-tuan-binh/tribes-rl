@@ -14,7 +14,7 @@ static PolyState S;
 static void test_map_invariants(void) {
     const int8_t tribes[2] = {TRIBE_IMPERIUS, TRIBE_BARDUR};
     for (uint32_t seed = 1; seed <= 50; seed++) {
-        poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, seed);
+        poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, seed, false);
         int ntiles = 11 * 11;
 
         // capitals: distinct CITY tiles in the interior, owned, with a unit
@@ -108,7 +108,7 @@ static void test_map_invariants(void) {
 static void test_scores_at_start(void) {
     // Imperius: tech 100 + centre 100 + warrior 10 + 9 border tiles * 20 = 390
     const int8_t tribes[2] = {TRIBE_IMPERIUS, TRIBE_LUXIDOOR};
-    poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, 42);
+    poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, 42, false);
     CHECK(S.players[0].score == 100 + 100 + 10 + 9 * 20);
     // Luxidoor: no tech, L3 walled capital: 0 + 100 + 10 + 180 = 290
     CHECK(S.players[1].score == 100 + 10 + 9 * 20);
@@ -119,7 +119,8 @@ static void test_scores_at_start(void) {
 static void test_full_games_on_generated_maps(void) {
     const int8_t tribes[2] = {TRIBE_XIN_XI, TRIBE_OUMAJI};
     for (uint32_t seed = 100; seed < 130; seed++) {
-        poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, seed);
+        poly_reset(&S, 2, tribes, 11, MODE_CAPITALS, seed, false);
+        S.max_turns = 50;   // bounded games for tests (product rules have no cap)
         PolyAction acts[POLY_MAX_ACTIONS];
         long steps = 0;
         while (!S.game_over && steps < 200000) {

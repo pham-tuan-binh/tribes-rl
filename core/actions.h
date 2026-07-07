@@ -248,7 +248,11 @@ static inline bool feas_build_road(const PolyState* s, int player, int tile) {
     if (!tech_researched(p, TECH_ROADS) || p->stars < ROAD_COST) return false;
     if (!obs_get(p, tile)) return false;
     Terrain ter = (Terrain)s->terrain[tile];
-    if (ter != TERRAIN_VILLAGE && ter != TERRAIN_PLAIN && ter != TERRAIN_FOREST) return false;
+    if (s->tribes_compat) {   // Tribes: village/plain/forest
+        if (ter != TERRAIN_VILLAGE && ter != TERRAIN_PLAIN && ter != TERRAIN_FOREST) return false;
+    } else {                  // product rules: open fields only (as real Polytopia)
+        if (ter != TERRAIN_PLAIN) return false;
+    }
     int ci = s->city_at[tile];
     if (!(ci == -1 || s->cities[ci].owner == player)) return false;
     if (s->net_tile[tile]) return false;

@@ -87,13 +87,16 @@ typedef struct {
     // --- game flow ---
     int8_t size;                    // board side (11..24)
     GameMode mode;
-    int16_t tick;                   // full rounds elapsed
-    int16_t max_turns;
+    int32_t tick;                   // full rounds elapsed
+    int32_t max_turns;
     int8_t active_player;
     bool leveling_up;               // a city must pick a level-up bonus now
     int8_t leveling_city;
     bool game_over;
     bool won_by_domination;         // game ended by all-capitals capture (not turn-cap ranking)
+    bool tribes_compat;             // exact GAIGResearch/Tribes rules (golden-trace replay);
+                                    // off = product rules (roads on PLAIN only)
+    bool fog;                       // partial observability (fog of war)
 
     uint32_t rng;                   // xorshift/rand_r state; seeded at reset
 } PolyState;

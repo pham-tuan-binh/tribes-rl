@@ -310,11 +310,12 @@ static inline void poly_generate_map(MgResult* out, int size, int num_players,
 // Game start (LevelLoader + Tribe.init): build a PolyState from a fresh map.
 // ---------------------------------------------------------------------------
 static inline void poly_reset(PolyState* s, int num_players, const int8_t* tribes,
-                              int size, GameMode mode, uint32_t seed) {
+                              int size, GameMode mode, uint32_t seed, bool fog) {
     memset(s, 0, sizeof(*s));
     s->size = (int8_t)size;
     s->num_players = (int8_t)num_players;
     s->mode = mode;
+    s->fog = fog;
     s->rng = seed ? seed : 1;
 
     MgResult map;
@@ -335,7 +336,7 @@ static inline void poly_reset(PolyState* s, int num_players, const int8_t* tribe
         pl->capital = -1;
         pl->result = RESULT_INCOMPLETE;
         pl->stars = INITIAL_STARS;
-        memset(pl->obs, 0xff, sizeof(pl->obs));   // v1: full observability
+        if (!fog) memset(pl->obs, 0xff, sizeof(pl->obs));   // full observability
 
         // initial tech + its score (Tribe.init)
         int8_t tech = TRIBE_INFO[tribes[p]].initial_tech;
@@ -368,6 +369,8 @@ static inline void poly_reset(PolyState* s, int num_players, const int8_t* tribe
         pl->score += UNIT_STATS[ut].points;
 
         poly_assign_city_tiles(s, ci, c->bound);
+        if (fog)   // initial vision around the capital (FIRST_CITY_CLEAR_RANGE)
+            poly_clear_view(s, p, c->x, c->y, FIRST_CITY_CLEAR_RANGE);
     }
 
     poly_begin(s);

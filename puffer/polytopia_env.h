@@ -129,6 +129,7 @@ typedef struct {
     int n_legal;
 
     float shaping;           // score-delta shaping coefficient (0 = off)
+    int fog;                 // partial observability (fog of war)
     int32_t prev_score[ENV_PLAYERS];
     int32_t episode_steps;
     int32_t max_episode_steps;
@@ -254,7 +255,12 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     uint8_t* ustat = o + 8 * ENV_TILES;
     uint8_t* sel = o + 9 * ENV_TILES;
 
+    const Player* viewer = &s->players[agent];
     for (int t = 0; t < ENV_TILES; t++) {
+        if (s->fog && !obs_get(viewer, t)) {   // unseen: fog terrain, nothing else
+            terr[t] = TERRAIN_FOG;
+            continue;
+        }
         terr[t] = (uint8_t)s->terrain[t];
         res[t] = (uint8_t)s->resource[t];
         bld[t] = s->building[t] == BUILDING_NONE ? 19 : (uint8_t)s->building[t];
@@ -287,7 +293,7 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     g[gi++] = (uint8_t)(e->phase == PH_TARGET ? 1 + e->pend_kind : 0);
     g[gi++] = agent == s->active_player ? 1 : 0;
     g[gi++] = (uint8_t)(me->stars > 200 ? 200 : me->stars);
-    g[gi++] = (uint8_t)(op->stars > 200 ? 200 : op->stars);
+    g[gi++] = s->fog ? 0 : (uint8_t)(op->stars > 200 ? 200 : op->stars);  // fog hides enemy economy
     g[gi++] = (uint8_t)(me->score / 50 > 255 ? 255 : me->score / 50);
     g[gi++] = (uint8_t)(op->score / 50 > 255 ? 255 : op->score / 50);
     g[gi++] = (uint8_t)s->tick;
@@ -298,7 +304,7 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     g[gi++] = (uint8_t)me->tribe;
     g[gi++] = (uint8_t)op->tribe;
     for (int t = 0; t < NUM_TECH; t++) g[gi++] = (me->techs >> t) & 1u;
-    for (int t = 0; t < NUM_TECH; t++) g[gi++] = (op->techs >> t) & 1u;
+    for (int t = 0; t < NUM_TECH; t++) g[gi++] = s->fog ? 0 : (op->techs >> t) & 1u;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +315,7 @@ static inline void env_new_game(PolyEnv* e) {
     tribes[0] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
     tribes[1] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
     uint32_t seed = poly_rand(&e->rng) | 1u;
-    poly_reset(&e->game, ENV_PLAYERS, tribes, ENV_SIZE, MODE_CAPITALS, seed);
+    poly_reset(&e->game, ENV_PLAYERS, tribes, ENV_SIZE, MODE_CAPITALS, seed, e->fog != 0);
     e->phase = PH_SELECT;
     e->sel_idx = -1; e->sel_tile = -1; e->sel_is_unit = false;
     e->pend_kind = -1; e->pend_arg = -1;

@@ -1,6 +1,14 @@
 // Sprite loading — asset paths mirror the Tribes reference GUI
-// (reference/Tribes/src/core/Types.java imageFile mappings).
-const TERRAIN_FILES = ['plain', 'water', 'deepwater', 'mountain3', 'village2', 'city3', 'forest2'];
+// (reference/Tribes/src/core/Types.java imageFile mappings). Terrain tiles
+// come in edge variants (e.g. plain-down-left.png) selected by neighborhood;
+// missing variants fall back to the base tile.
+const TERRAIN_BASE = ['plain', 'water', 'deepwater', 'mountain3', 'village2', 'city3', 'forest2'];
+const TERRAIN_VARIANTS = [
+  'down', 'left', 'top', 'right', 'down-left', 'down-right', 'down-dr', 'top-down',
+  'top-left', 'top-right', 'top-ur', 'right-ur', 'left-ul', 'corner-dr', 'corner-ul',
+  'down-left-el', 'down-left-ed', 'down-left-el-dr', 'down-left-ed-ul', 'dl',
+  'top-down-right', 'top-down-ur', 'top-left-right', 'top-left-ur', 'down-right-ur',
+];
 const RESOURCE_FILES = ['fish2', 'fruit2', 'animal2', 'whale2', null, 'ore2', 'crops2', 'ruins2'];
 const BUILDING_FILES = ['dock2', 'mine2', 'forge2', 'farm2', 'windmill2', 'custom_house2',
   'lumber_hut2', 'sawmill2', 'temple2', 'temple2', 'temple2', 'temple2',
@@ -12,7 +20,7 @@ function load(src) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);   // missing sprite -> draw nothing
+    img.onerror = () => resolve(null);   // missing variant -> fallback handled in lookup
     img.src = src;
   });
 }
@@ -23,14 +31,19 @@ export class Assets {
     const jobs = [];
     const put = (obj, key, src) => jobs.push(load(src).then((img) => { obj[key] = img; }));
 
-    a.terrain = {};
-    TERRAIN_FILES.forEach((f, i) => put(a.terrain, i, `${base}/terrain/${f}.png`));
+    a.terrain = {};      // base tile per terrain id
+    a.variants = {};     // `${terrainId}|${suffix}` -> image
+    TERRAIN_BASE.forEach((f, i) => {
+      put(a.terrain, i, `${base}/terrain/${f}.png`);
+      for (const v of TERRAIN_VARIANTS)
+        put(a.variants, `${i}|${v}`, `${base}/terrain/${f}-${v}.png`);
+    });
+
     a.resource = {};
     RESOURCE_FILES.forEach((f, i) => { if (f) put(a.resource, i, `${base}/resource/${f}.png`); });
     a.building = {};
     BUILDING_FILES.forEach((f, i) => put(a.building, i, `${base}/building/${f}.png`));
 
-    // units: [type][tribeKey] and exhausted variants
     a.unit = UNIT_DIRS.map(() => ({}));
     a.unitExhausted = UNIT_DIRS.map(() => ({}));
     UNIT_DIRS.forEach((dir, type) => {
@@ -44,9 +57,19 @@ export class Assets {
     put(a.misc, 'fog', `${base}/fog.png`);
     put(a.misc, 'shine', `${base}/shine3.png`);
     put(a.misc, 'walls', `${base}/terrain/walls.png`);
-    put(a.misc, 'road', `${base}/terrain/road.png`);
+    put(a.misc, 'roadV', `${base}/terrain/road-v-half.png`);
+    put(a.misc, 'roadD', `${base}/terrain/road-d-half.png`);
     await Promise.all(jobs);
     return a;
+  }
+
+  // terrain image for id `t` with optional edge-variant suffix
+  terrainVariant(t, suffix) {
+    if (suffix) {
+      const img = this.variants[`${t}|${suffix}`];
+      if (img) return img;
+    }
+    return this.terrain[t];
   }
 
   unitSprite(type, tribe, exhausted) {

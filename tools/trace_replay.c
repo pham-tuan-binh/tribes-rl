@@ -145,6 +145,7 @@ static void load_map(const char* path) {
     }
     S.tick = 0;
     S.active_player = 0;
+    S.tribes_compat = true;   // exact GAIGResearch/Tribes rules for replay
 }
 
 // ---------------------------------------------------------------------------

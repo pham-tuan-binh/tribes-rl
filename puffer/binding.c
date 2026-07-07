@@ -35,6 +35,9 @@ void my_init(Env* env, Dict* kwargs) {
         env->shaping = (float)it->value;
     if ((it = dict_get_unsafe(kwargs, "max_episode_steps")) != NULL)
         env->max_episode_steps = (int32_t)it->value;
+    env->fog = 1;   // fog of war on by default
+    if ((it = dict_get_unsafe(kwargs, "fog")) != NULL)
+        env->fog = (int)it->value;
 
     // distinct per-env rng streams (envs are created sequentially)
     static uint32_t env_counter = 0;

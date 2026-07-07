@@ -14,7 +14,7 @@ int main(void) {
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
     for (uint32_t seed = 1; seed <= 200; seed++) {
-        poly_reset(&s, 2, tribes, 11, MODE_CAPITALS, seed);
+        poly_reset(&s, 2, tribes, 11, MODE_CAPITALS, seed, false);
         while (!s.game_over) {
             int n = poly_enumerate_actions(&s, acts, POLY_MAX_ACTIONS);
             PolyAction* a = &acts[poly_rand_int(&s.rng, n)];

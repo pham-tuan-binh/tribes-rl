@@ -23,7 +23,7 @@ EMSCRIPTEN_KEEPALIVE int poly_obs_size(void) { return POLY_OBS_SIZE; }
 EMSCRIPTEN_KEEPALIVE int poly_map_size(void) { return ENV_SIZE; }
 EMSCRIPTEN_KEEPALIVE int poly_num_players(void) { return E.game.num_players; }
 
-EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed) {
+EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed, int fog) {
     memset(&E, 0, sizeof(E));
     E.observations = &obs_buf[0][0];
     E.actions = act_buf;
@@ -31,9 +31,17 @@ EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed) {
     E.terminals = term_buf;
     E.action_mask = &mask_buf[0][0];
     E.num_agents = ENV_PLAYERS;
+    E.fog = fog;
+    E.max_episode_steps = 1 << 30;   // product rules: no practical stop
     E.rng = seed ? seed : 1;
     poly_env_reset(&E);
 }
+
+// per-player visibility for fog rendering (1 = tile explored)
+EMSCRIPTEN_KEEPALIVE int poly_visible(int player, int tile) {
+    return E.game.fog ? (obs_get(&E.game.players[player], tile) ? 1 : 0) : 1;
+}
+EMSCRIPTEN_KEEPALIVE int poly_fog_enabled(void) { return E.game.fog ? 1 : 0; }
 
 // Apply one micro-action for the active player. Returns 1 while the game is
 // running, 0 once it ended (the env auto-resets; call poly_new_game to control
