@@ -980,20 +980,9 @@ static inline int poly_capture(PolyState* s, int player, int x, int y) {
 }
 
 // ---------------------------------------------------------------------------
-// Engine API (implemented across M1; declarations fixed now so binding.c,
-// tests and the WASM bridge can build against them)
+// Engine API surface (see actions.h for actions, game.h for the turn machine,
+// mapgen.h for procedural generation / poly_reset)
 // ---------------------------------------------------------------------------
-
-// Initialize a fresh game: procgen map from seed, place capitals & starting units.
-void poly_reset(PolyState* s, int num_players, const int8_t* tribes, int size,
-                GameMode mode, uint32_t seed);
-
-// Legal-action mask for the active player at the current phase.
-// `mask` has POLY_ACTION_SPACE bits; sized by the acting layer (puffer/web).
-// Defined in actions.h (M1).
-
-// Apply one atomic action for the active player. Returns false if illegal.
-bool poly_apply(PolyState* s, int32_t action);
 
 // True when the game has ended; results are in players[i].result.
 static inline bool poly_done(const PolyState* s) { return s->game_over; }

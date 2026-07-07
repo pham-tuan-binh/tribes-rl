@@ -5,9 +5,13 @@ ASAN_FLAGS = -std=c11 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror
 BUILD := build
 TEST_SRCS := $(wildcard core/tests/test_*.c)
 TESTS := $(patsubst core/tests/%.c,$(BUILD)/%,$(TEST_SRCS))
-HDRS := core/polytopia.h core/constants.h core/actions.h core/game.h
+HDRS := $(wildcard core/*.h)
 
-.PHONY: test asan clean
+.PHONY: test asan bench clean
+
+bench: | $(BUILD)
+	$(CC) -std=c11 -O3 -march=native -Wall -Wextra -Werror -o $(BUILD)/bench core/tests/bench.c
+	@./$(BUILD)/bench
 
 test: $(TESTS)
 	@for t in $(TESTS); do ./$$t || exit 1; done
