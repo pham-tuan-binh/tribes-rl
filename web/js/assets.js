@@ -25,6 +25,21 @@ function load(src) {
   });
 }
 
+// The tile art carries a baked darker rim that reads as a grid between tiles.
+// Crop a few pixels off every side and stretch back to full size: the rim is
+// discarded and, because the scale is uniform about the center, features that
+// cross tile edges (coastlines) still meet their neighbors.
+function deborder(img, inset = 3) {
+  if (!img) return img;
+  const cv = document.createElement('canvas');
+  cv.width = img.width;
+  cv.height = img.height;
+  cv.getContext('2d').drawImage(img,
+    inset, inset, img.width - 2 * inset, img.height - 2 * inset,
+    0, 0, img.width, img.height);
+  return cv;
+}
+
 export class Assets {
   static async load(base = 'assets') {
     const a = new Assets();
@@ -37,12 +52,16 @@ export class Assets {
       jobs.push(load(src).then((img) => { obj[key] = img; }));
     };
 
+    const putTile = (obj, key, src) => {
+      if (have.size && !have.has(src.slice(base.length + 1))) return;
+      jobs.push(load(src).then((img) => { obj[key] = deborder(img); }));
+    };
     a.terrain = {};      // base tile per terrain id
     a.variants = {};     // `${terrainId}|${suffix}` -> image
     TERRAIN_BASE.forEach((f, i) => {
-      put(a.terrain, i, `${base}/terrain/${f}.png`);
+      putTile(a.terrain, i, `${base}/terrain/${f}.png`);
       for (const v of TERRAIN_VARIANTS)
-        put(a.variants, `${i}|${v}`, `${base}/terrain/${f}-${v}.png`);
+        putTile(a.variants, `${i}|${v}`, `${base}/terrain/${f}-${v}.png`);
     });
 
     a.resource = {};

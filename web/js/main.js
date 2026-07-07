@@ -217,8 +217,7 @@ function refreshPanel() {
     for (let t = 0; t < 24; t++)
       el.chips[t].classList.toggle('researched', ((bits >> t) & 1) === 1);
   }
-  $('hint').textContent = humanTurn() ? PHASE_HINT[game.phase()] :
-    state.mode === 'human' ? '' : 'agents are playing';
+  $('hint').textContent = humanTurn() ? PHASE_HINT[game.phase()] : '';
 }
 
 const tally = { wins: [0, 0, 0, 0], draws: 0 };
