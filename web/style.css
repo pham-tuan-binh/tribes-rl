@@ -117,12 +117,14 @@ canvas {
 .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 header { display: flex; align-items: center; justify-content: space-between; }
-.hdr-btns { display: flex; align-items: center; gap: 4px; }
+.hdr-left { display: flex; align-items: center; gap: 12px; }
 #gh {
-  display: flex; align-items: center; padding: 4px;
+  display: flex; align-items: center;
   color: var(--cloudy);
 }
 #gh:hover { color: var(--amber); }
+/* icons match the title's visual size */
+#gh svg, #theme svg { width: 21px; height: 21px; }
 header h1 {
   font: 700 26px Inter, sans-serif;
   letter-spacing: -0.01em;

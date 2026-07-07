@@ -409,8 +409,9 @@ $('end-turn').onclick = () => {
 };
 const speedInput = $('speed');
 speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').textContent = speedLabel(); };
-// on release: restart the game at the new pace (also drops any sim backlog)
-speedInput.onchange = () => resetGame();
+// on release: drop any sim backlog so the new pace applies cleanly (the
+// game itself keeps running)
+speedInput.onchange = () => { state.stepAccum = 0; };
 speedInput.oninput();
 
 // --- theme: system preference by default; the toggle pins light/dark ---
