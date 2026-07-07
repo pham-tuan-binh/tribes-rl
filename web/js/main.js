@@ -200,3 +200,6 @@ speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').t
 speedInput.oninput();
 
 requestAnimationFrame(frame);
+
+// debug/test handle (also handy in the browser console)
+window.__poly = { game, renderer, state, humanTurn, legalTiles, setMode };
