@@ -76,6 +76,13 @@ header h1 .accent { color: var(--bolt); }
 #mode-agents.active { background: var(--bolt); color: #fff; box-shadow: 0 2px 8px rgba(245, 158, 11, .35); }
 #mode-human.active { background: var(--flower); color: #fff; box-shadow: 0 2px 8px rgba(236, 72, 153, .35); }
 
+/* small segmented control (viewpoint switcher) */
+.seg.small { flex: 1; padding: 2px; }
+.seg.small .seg-btn { font-size: 12px; padding: 5px 0; }
+.seg.small .seg-btn.active {
+  background: var(--seg-accent, var(--ink)); color: #fff;
+}
+
 /* cards */
 .card {
   background: var(--card); border: 1px solid var(--line);

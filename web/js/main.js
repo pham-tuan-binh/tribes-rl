@@ -15,6 +15,7 @@ const state = {
   stepAccum: 0,
   bannerUntil: 0,
   panelSig: '',            // rebuild the side panel only when this changes
+  viewpoint: -1,           // Agents mode: -1 = whole world, 0..N-1 = that agent's fog
 };
 
 const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
@@ -36,7 +37,24 @@ function speedLabel() {
 
 // --- human interaction ---
 function humanTurn() { return state.mode === 'human' && game.activePlayer() === 0 && !game.gameOver(); }
-function viewer() { return state.mode === 'human' ? 0 : -1; }
+// Human mode renders from the human's perspective; Agents mode renders the
+// selected viewpoint (world, or any agent's own fog of war).
+function viewer() { return state.mode === 'human' ? 0 : state.viewpoint; }
+
+function buildViewSeg() {
+  const seg = $('view-seg');
+  seg.innerHTML = '';
+  const opts = [{ v: -1, label: 'world' }];
+  for (let p = 0; p < game.players; p++) opts.push({ v: p, label: `p${p + 1}` });
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.className = 'seg-btn' + (state.viewpoint === o.v ? ' active' : '');
+    if (o.v >= 0) b.style.setProperty('--seg-accent', PLAYER_COLOR[o.v]);
+    b.textContent = o.label;
+    b.onclick = () => { state.viewpoint = o.v; buildViewSeg(); };
+    seg.appendChild(b);
+  }
+}
 
 function legalTiles() {
   const m = game.mask(0), out = new Set();
@@ -237,9 +255,11 @@ function setMode(m) {
   $('mode-agents').classList.toggle('active', m === 'agents');
   $('mode-human').classList.toggle('active', m === 'human');
   $('speed-row').classList.toggle('hidden', m === 'human');
+  $('view-row').classList.toggle('hidden', m === 'human');
   game.newGame((Math.random() * 2 ** 31) | 0);
   $('banner').classList.add('hidden');
   state.panelSig = '';
+  buildViewSeg();
 }
 $('new-game').onclick = () => { game.newGame((Math.random() * 2 ** 31) | 0); $('banner').classList.add('hidden'); state.panelSig = ''; };
 $('pause').onclick = () => { state.paused = !state.paused; $('pause').textContent = state.paused ? 'resume' : 'pause'; };
@@ -252,6 +272,7 @@ $('end-turn').onclick = () => {
 const speedInput = $('speed');
 speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').textContent = speedLabel(); };
 speedInput.oninput();
+buildViewSeg();
 
 requestAnimationFrame(frame);
 
