@@ -19,12 +19,41 @@ const state = {
                            // -1 = whole world, 0..N-1 = a fixed agent's fog
 };
 
-const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
-const renderer = new Renderer($('board'), game, assets);
-const trained = await game.loadWeights('weights/latest.bin');
-const agent = trained ? new TrainedAgent() : new RandomAgent();
-document.title = trained ? 'polytopia-rl' : 'polytopia-rl (random agents)';
-game.newGame((Math.random() * 2 ** 31) | 0);
+const assets = await Assets.load();
+let game, renderer, agent;
+
+async function loadEngine(players) {
+  game = await Game.load(players);
+  renderer = new Renderer($('board'), game, assets);
+  const trained = await game.loadWeights(players);
+  agent = trained ? new TrainedAgent() : new RandomAgent();
+  document.title = trained ? 'polytopia-rl' : 'polytopia-rl (random agents)';
+  game.newGame((Math.random() * 2 ** 31) | 0);
+  state.panelSig = '';
+  tally.wins.fill(0); tally.draws = 0;
+  $('banner').classList.add('hidden');
+  buildPlayersSeg();
+  buildViewSeg();
+}
+
+function buildPlayersSeg() {
+  const seg = $('players-seg');
+  seg.innerHTML = '';
+  for (const n of [2, 3, 4]) {
+    const b = document.createElement('button');
+    b.className = 'seg-btn' + (state.players === n ? ' active' : '');
+    b.textContent = `${n}`;
+    b.onclick = async () => {
+      if (state.players === n) return;
+      state.players = n;
+      await loadEngine(n);
+      updateScoreboard();
+    };
+    seg.appendChild(b);
+  }
+}
+
+state.players = 2;   // engine loads at the bottom, after all declarations
 
 // --- speed mapping: 0 -> 0.5 actions/s ... 100 -> unthrottled ---
 function actionsPerSecond() {
@@ -313,9 +342,13 @@ $('end-turn').onclick = () => {
 const speedInput = $('speed');
 speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').textContent = speedLabel(); };
 speedInput.oninput();
-buildViewSeg();
 
+// --- bootstrap: all declarations above are live now ---
+await loadEngine(state.players);
 requestAnimationFrame(frame);
 
 // debug/test handle (also handy in the browser console)
-window.__poly = { game, renderer, state, humanTurn, legalTiles, setMode };
+window.__poly = {
+  get game() { return game; }, get renderer() { return renderer; },
+  state, humanTurn, legalTiles, setMode,
+};

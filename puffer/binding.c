@@ -1,7 +1,8 @@
 // PufferLib 4.0 binding for polytopia. Lives at ocean/polytopia/binding.c in
 // a PufferLib checkout (with polytopia_env.h and core/ alongside).
-#define OBS_SIZE 1272          // literal for build tooling; asserted below
-#include "polytopia_env.h"
+// Build with EXTRA_CFLAGS="-DENV_PLAYERS=4" for the 4-player env
+// (obs size scales with the per-player blocks: 2p=1272, 3p=1301, 4p=1330).
+#include "polytopia_env.h"     // defines OBS_SIZE = POLY_OBS_SIZE
 
 #define NUM_ATNS 1
 #define ACT_SIZES {197}
@@ -12,7 +13,6 @@
 #define Env PolyEnv
 #include "vecenv.h"
 
-_Static_assert(OBS_SIZE == POLY_OBS_SIZE, "OBS_SIZE literal drifted from env layout");
 _Static_assert(ACTION_N == 197, "ACT_SIZES/MY_ACTION_MASK literals drifted from ACTION_N");
 
 // perm-aware per-slot buffer wiring (self-play seat swaps), chess pattern

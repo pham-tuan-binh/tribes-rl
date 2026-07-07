@@ -1,6 +1,6 @@
 // Thin wrapper over the WASM engine (web/wasm/bridge.c exports).
 // All game logic lives in C; this file only marshals memory views.
-import createPoly from '../dist/poly.js';
+// One module per player count (compile-time layouts): dist/poly{2,3,4}.js.
 
 export const TERRAIN = ['plain', 'shallow', 'deep', 'mountain', 'village', 'city', 'forest', 'fog'];
 export const RESOURCE = ['fish', 'fruit', 'animal', 'whales', '', 'ore', 'crops', 'ruins'];
@@ -43,8 +43,9 @@ export function verbName(v) {
 }
 
 export class Game {
-  static async load() {
+  static async load(players = 2) {
     const g = new Game();
+    const { default: createPoly } = await import(`../dist/poly${players}.js`);
     g.m = await createPoly();
     const f = (name, ret, args) => g.m.cwrap(name, ret, args);
     g.newGameRaw = f('poly_new_game', null, ['number', 'number']);
@@ -113,8 +114,11 @@ export class Game {
     return out;
   }
 
-  // fetch trained weights (native trainer .bin); returns true on success
-  async loadWeights(url) {
+  // fetch trained weights (native trainer .bin); returns true on success.
+  // weights are per player count (obs dims differ): latest_3p.bin etc.,
+  // with latest.bin as the 2-player default.
+  async loadWeights(players = 2) {
+    const url = players === 2 ? 'weights/latest.bin' : `weights/latest_${players}p.bin`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) return false;

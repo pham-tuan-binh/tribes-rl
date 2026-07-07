@@ -14,5 +14,7 @@ export LD_LIBRARY_PATH=$SP/nvidia/nccl/lib:$SP/nvidia/cudnn/lib
 
 cd ~/PufferLib
 bash ~/polytopia-rl/puffer/install_into_pufferlib.sh ~/PufferLib ~/polytopia-rl
+# PLAYERS=4 trains the 4-player env (rebuilds _C with that player count)
+export EXTRA_CFLAGS="-DENV_PLAYERS=${PLAYERS:-2}"
 ./build.sh polytopia
 exec puffer train polytopia "$@"
