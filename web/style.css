@@ -101,7 +101,13 @@ header h1 .accent { color: var(--amber); }
   transition: color .12s ease, background .12s ease;
 }
 .seg-btn:hover { color: var(--amber); }
-.seg-btn.active { background: var(--text); color: var(--bg); }
+/* active = quiet: ink text + a thin amber underline, no inverted block */
+.seg-btn.active {
+  background: var(--hover);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--amber);
+}
 .seg.small { flex: 1; }
 .seg.small .seg-btn { font-size: 10px; padding: 6px 0; }
 
