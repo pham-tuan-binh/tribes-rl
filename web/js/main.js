@@ -192,25 +192,54 @@ function refreshPanel() {
     state.mode === 'human' ? '' : 'agents are playing';
 }
 
+const tally = { wins: [0, 0, 0, 0], draws: 0 };
+
 function showResult() {
   const el = $('banner');
   let w = -1;
   for (let p = 0; p < game.players; p++) if (game.result(p) === 0) w = p;
   if (w < 0) {
-    el.textContent = 'draw — no capital conquest';
-    el.style.color = '#dfe6ee';
+    tally.draws++;
+    el.textContent = 'draw';
+    el.style.background = 'rgba(31,36,48,.88)';
   } else {
+    tally.wins[w]++;
     el.textContent = state.mode === 'human'
       ? (w === 0 ? 'you win!' : 'you lose')
-      : `player ${w + 1} wins`;
-    el.style.color = PLAYER_COLOR[w];
+      : `p${w + 1} wins · turn ${lastTick}`;
+    el.style.background = PLAYER_COLOR[w];
   }
   el.classList.remove('hidden');
-  state.bannerUntil = performance.now() + 2500;
+  // toast fades fast at high speed so it never obscures the next game
+  const dur = actionsPerSecond() === Infinity ? 700 : Math.max(900, 2500 - state.speed * 18);
+  state.bannerUntil = performance.now() + dur;
+  updateScoreboard();
+}
+
+function updateScoreboard() {
+  const sb = $('scoreboard');
+  const total = tally.wins.reduce((a, b) => a + b, 0) + tally.draws;
+  if (total === 0) { sb.classList.add('hidden'); return; }
+  sb.classList.remove('hidden');
+  sb.innerHTML = '';
+  for (let p = 0; p < game.players; p++) {
+    const s = document.createElement('span');
+    s.className = 'w';
+    s.style.color = PLAYER_COLOR[p];
+    s.textContent = `${tally.wins[p]}`;
+    sb.appendChild(s);
+    if (p < game.players - 1) sb.appendChild(document.createTextNode('–'));
+  }
+  const d = document.createElement('span');
+  d.className = 'draws';
+  d.textContent = `${tally.draws} draws · ${total} games`;
+  sb.appendChild(d);
 }
 
 // --- main loop ---
 let last = performance.now();
+let lastPanel = 0;
+let lastTick = 0;
 function frame(now) {
   const dt = Math.min(now - last, 100) / 1000;
   last = now;
@@ -218,13 +247,16 @@ function frame(now) {
   if (!state.paused && !humanTurn()) {
     const aps = actionsPerSecond();
     if (aps === Infinity) {
-      const budget = performance.now() + 12;
+      // unthrottled: spend most of the frame simulating, paint at ~30fps
+      const budget = performance.now() + 28;
       while (performance.now() < budget) {
         stepAgentOnce();
         if (humanTurn()) break;
       }
     } else {
       state.stepAccum += aps * dt;
+      // clamp the backlog so a slow frame never causes a huge catch-up burst
+      state.stepAccum = Math.min(state.stepAccum, 400);
       while (state.stepAccum >= 1) {
         state.stepAccum -= 1;
         stepAgentOnce();
@@ -237,7 +269,10 @@ function frame(now) {
     $('banner').classList.add('hidden');
     state.bannerUntil = 0;
   }
-  refreshPanel();
+  if (now - lastPanel > 100 || humanTurn()) {   // panel at 10Hz; instant for humans
+    lastPanel = now;
+    refreshPanel();
+  }
   renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
   requestAnimationFrame(frame);
 }
@@ -246,10 +281,11 @@ function stepAgentOnce() {
   if (game.gameOver()) return;
   const p = game.activePlayer();
   if (state.mode === 'human' && p === 0) return;
+  lastTick = game.tick();
   const a = agent.pick(game, p);
   if (a === null) return;
   const running = game.act(a);
-  if (!running) showResult();   // env auto-resets; banner shows the outcome
+  if (!running) showResult();   // env auto-resets; toast + scoreboard record it
 }
 
 // --- controls ---
