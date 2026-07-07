@@ -341,12 +341,26 @@ static inline int poly_reachable(const PolyState* s, int unit_idx, uint8_t* dest
     int start = tile_idx(s, u->x, u->y);
     cost[start] = 0.0;
 
-    for (;;) {
-        // extract-min (boards are <=576 tiles; O(V^2) is fine for v1)
-        int cur = -1; double best = 1e18;
-        for (int i = 0; i < ntiles; i++)
-            if (!done[i] && cost[i] < best) { best = cost[i]; cur = i; }
-        if (cur < 0) break;
+    // binary min-heap of (cost, tile) with lazy deletion
+    struct { double c; int16_t t; } heap[MAX_TILES * 4];
+    int hn = 0;
+    heap[hn].c = 0.0; heap[hn].t = (int16_t)start; hn++;
+
+    while (hn > 0) {
+        // pop min
+        double cur_c = heap[0].c;
+        int cur = heap[0].t;
+        hn--;
+        heap[0] = heap[hn];
+        for (int i = 0;;) {
+            int l = 2 * i + 1, r = l + 1, m = i;
+            if (l < hn && heap[l].c < heap[m].c) m = l;
+            if (r < hn && heap[r].c < heap[m].c) m = r;
+            if (m == i) break;
+            { __typeof__(heap[0]) tmp = heap[i]; heap[i] = heap[m]; heap[m] = tmp; }
+            i = m;
+        }
+        if (done[cur] || cur_c > cost[cur]) continue;   // stale entry
         done[cur] = 1;
 
         double cost_from = cost[cur];
@@ -416,7 +430,19 @@ static inline int poly_reachable(const PolyState* s, int unit_idx, uint8_t* dest
             if (!allowed) continue;
 
             double total = cost_from + step;
-            if (total < cost[t]) cost[t] = total;
+            if (total < cost[t]) {
+                cost[t] = total;
+                if (hn < (int)(sizeof(heap) / sizeof(heap[0]))) {   // push
+                    int i = hn++;
+                    heap[i].c = total; heap[i].t = (int16_t)t;
+                    while (i > 0) {
+                        int par = (i - 1) / 2;
+                        if (heap[par].c <= heap[i].c) break;
+                        { __typeof__(heap[0]) tmp = heap[i]; heap[i] = heap[par]; heap[par] = tmp; }
+                        i = par;
+                    }
+                }
+            }
         }
     }
 
