@@ -262,8 +262,11 @@ function refreshPanel() {
   if (playerEls.length !== game.players) buildPlayersPanel();
   for (let p = 0; p < game.players; p++) {
     const el = playerEls[p];
-    el.card.classList.toggle('active-turn', p === active);
-    el.head.textContent =
+    const out = game.eliminated(p) === 1;
+    el.card.classList.toggle('active-turn', !out && p === active);
+    el.card.classList.toggle('eliminated', out);
+    el.head.textContent = out ?
+      `p${p + 1}  eliminated` :
       `p${p + 1}  ★${game.stars(p)}  +${game.income(p)}/turn  ·  score ${game.score(p)}`;
     const bits = game.techs(p) >>> 0;
     for (let t = 0; t < 24; t++)
@@ -390,6 +393,9 @@ function setMode(m) {
   $('mode-human').classList.toggle('active', m === 'human');
   $('speed-row').classList.toggle('hidden', m === 'human');
   $('view-row').classList.toggle('hidden', m === 'human');
+  // only show controls that exist in this mode
+  $('end-turn').classList.toggle('hidden', m !== 'human');
+  $('pause').classList.toggle('hidden', m === 'human');
   resetGame();
   buildViewSeg();
 }

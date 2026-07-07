@@ -68,8 +68,18 @@ canvas {
 #scoreboard .draws { font-size: 10px; margin-left: auto; color: var(--cloudy); }
 
 /* ---- panel: wide gaps BETWEEN functional groups, tight rows within ---- */
-#panel { width: 320px; display: flex; flex-direction: column; gap: 28px; }
+#panel { width: 320px; display: flex; flex-direction: column; gap: 26px; }
 .group { display: flex; flex-direction: column; gap: 10px; }
+
+/* section header: the name, then the divider runs to the edge */
+.sec {
+  display: flex; align-items: center; gap: 10px;
+  font: 600 9px var(--mono);
+  letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--cloudy);
+  margin-bottom: 2px;
+}
+.sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 header h1 {
   font: 600 16px Inter, sans-serif;
@@ -160,6 +170,7 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
 }
 .player-card + .player-card { margin-top: 8px; }
 .player-card.active-turn { background: var(--hover); border-color: var(--pc); border-left-width: 3px; }
+.player-card.eliminated { opacity: .38; }
 .player-card.p0 { --pc: #e2413e; }
 .player-card.p1 { --pc: #3f8ee0; }
 .player-card.p2 { --pc: #e0b23f; }
@@ -186,11 +197,6 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
 .tech-chip.researched { color: var(--amber); border-color: var(--amber); }
 
 /* shared action log */
-#log h2 {
-  font: 600 10px var(--mono);
-  letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--mid); margin-bottom: 8px;
-}
 #log-lines {
   font: 400 10px/1.7 var(--mono); font-variant-numeric: tabular-nums;
   letter-spacing: .2px; color: var(--mid);
@@ -205,11 +211,7 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
 #log-lines .turn { color: var(--cloudy); }
 
 /* verb sheet */
-#verbs h2 {
-  font: 600 10px var(--mono);
-  letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--mid); margin-bottom: 10px;
-}
+#verbs .sec { margin-bottom: 10px; }
 #verb-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 #verb-buttons button { font-size: 10.5px; padding: 6px 10px; }
 

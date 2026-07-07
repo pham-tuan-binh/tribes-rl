@@ -164,6 +164,8 @@ EMSCRIPTEN_KEEPALIVE int poly_tick(void) { return E.game.tick; }
 EMSCRIPTEN_KEEPALIVE int poly_game_over(void) { return E.game.game_over ? 1 : 0; }
 // result of the LAST FINISHED game (the env auto-resets on episode end)
 EMSCRIPTEN_KEEPALIVE int poly_result(int player) { return E.final_result[player]; }
+// LIVE status of the running game: 1 while the player is eliminated (RESULT_LOSS)
+EMSCRIPTEN_KEEPALIVE int poly_eliminated(int player) { return E.game.players[player].result == RESULT_LOSS ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE int poly_stars(int player) { return E.game.players[player].stars; }
 EMSCRIPTEN_KEEPALIVE int poly_score(int player) { return E.game.players[player].score; }
 EMSCRIPTEN_KEEPALIVE int poly_income(int player) { return env_income(&E.game, player); }
