@@ -158,6 +158,7 @@ typedef struct {
     int32_t prev_score[ENV_PLAYERS];
     int32_t prev_cities[ENV_PLAYERS];
     int32_t prev_killval[ENV_PLAYERS];
+    int32_t prev_lostval[ENV_PLAYERS];
     int32_t prev_seen[ENV_PLAYERS];
     int32_t prev_prod[ENV_PLAYERS];
     int32_t episode_steps;
@@ -360,6 +361,7 @@ static inline void env_new_game(PolyEnv* e) {
         e->prev_score[p] = e->game.players[p].score;
         e->prev_cities[p] = e->game.players[p].num_cities;
         e->prev_killval[p] = e->game.players[p].kill_value;
+        e->prev_lostval[p] = e->game.players[p].lost_value;
         e->prev_seen[p] = e->game.players[p].tiles_seen;
         e->prev_prod[p] = env_income(&e->game, p);
     }
@@ -576,13 +578,14 @@ static inline void poly_env_step(PolyEnv* e) {
             }
             e->prev_cities[a] = p->num_cities;
 
+            // trades: +value killed, -value lost (loss counted on the OWNER —
+            // by any cause including disband, so retreating-by-disband is not
+            // a way to deny the opponent their earned advantage)
             int32_t d_kill = p->kill_value - e->prev_killval[a];
-            if (d_kill != 0 && e->reward_kill != 0.0f) {
-                r += e->reward_kill * (float)d_kill;                    // trades by star value
-                for (int o = 0; o < ENV_PLAYERS; o++)
-                    if (o != a) *e->reward_ptr[o] -= e->reward_kill * (float)d_kill * opp_share;
-            }
+            int32_t d_lost = p->lost_value - e->prev_lostval[a];
+            r += e->reward_kill * (float)(d_kill - d_lost);
             e->prev_killval[a] = p->kill_value;
+            e->prev_lostval[a] = p->lost_value;
 
             int32_t d_seen = p->tiles_seen - e->prev_seen[a];
             if (d_seen > 0) r += e->reward_explore * (float)d_seen;     // exploration

@@ -15,7 +15,8 @@ const state = {
   stepAccum: 0,
   bannerUntil: 0,
   panelSig: '',            // rebuild the side panel only when this changes
-  viewpoint: -1,           // Agents mode: -1 = whole world, 0..N-1 = that agent's fog
+  viewpoint: -2,           // Agents mode: -2 = follow active agent's fog (default),
+                           // -1 = whole world, 0..N-1 = a fixed agent's fog
 };
 
 const [game, assets] = await Promise.all([Game.load(), Assets.load()]);
@@ -38,13 +39,17 @@ function speedLabel() {
 // --- human interaction ---
 function humanTurn() { return state.mode === 'human' && game.activePlayer() === 0 && !game.gameOver(); }
 // Human mode renders from the human's perspective; Agents mode renders the
-// selected viewpoint (world, or any agent's own fog of war).
-function viewer() { return state.mode === 'human' ? 0 : state.viewpoint; }
+// selected viewpoint: follow = the ACTIVE agent's fog, alternating with turns.
+function viewer() {
+  if (state.mode === 'human') return 0;
+  if (state.viewpoint === -2) return game.activePlayer();
+  return state.viewpoint;
+}
 
 function buildViewSeg() {
   const seg = $('view-seg');
   seg.innerHTML = '';
-  const opts = [{ v: -1, label: 'world' }];
+  const opts = [{ v: -2, label: 'follow' }, { v: -1, label: 'world' }];
   for (let p = 0; p < game.players; p++) opts.push({ v: p, label: `p${p + 1}` });
   for (const o of opts) {
     const b = document.createElement('button');

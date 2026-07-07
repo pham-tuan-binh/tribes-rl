@@ -62,6 +62,9 @@ typedef struct {
     uint64_t connected_cities;  // bitset over city index (trade-connected to capital)
     int32_t tiles_seen;         // fog tiles revealed (reward shaping)
     int32_t kill_value;         // summed star-cost of units this player killed
+    int32_t lost_value;         // summed star-cost of own units lost (any cause,
+                                // incl. disband — prevents the disband-to-deny-
+                                // kill-reward exploit)
     // fog of war: bitset over tiles, kept even in full-obs mode
     uint8_t obs[(MAX_TILES + 7) / 8];
 } Player;

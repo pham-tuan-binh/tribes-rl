@@ -46,6 +46,7 @@ typedef struct {
 static inline void poly_kill_unit(PolyState* s, int ui) {
     Unit* u = &s->units[ui];
     s->players[u->owner].score -= UNIT_STATS[u->type].points;
+    s->players[u->owner].lost_value += UNIT_STATS[u->type].cost;
     poly_remove_unit(s, ui);
 }
 
