@@ -26,17 +26,25 @@
       <h1>tribes<span class="accent">-rl</span></h1>
     </header>
 
-    <div class="seg" id="mode-row" role="tablist">
-      <button id="mode-agents" class="seg-btn active" role="tab">agents</button>
-      <button id="mode-human" class="seg-btn" role="tab">human</button>
-    </div>
+    <!-- what you play: mode + the actions that drive it -->
+    <section class="group">
+      <div class="seg" id="mode-row" role="tablist">
+        <button id="mode-agents" class="seg-btn active" role="tab">agents</button>
+        <button id="mode-human" class="seg-btn" role="tab">human</button>
+      </div>
+      <div class="row btns">
+        <button id="new-game">new game</button>
+        <button id="pause">pause</button>
+        <button id="end-turn" class="primary">end turn</button>
+      </div>
+    </section>
 
-    <div class="row" id="players-row">
-      <label>players</label>
-      <div class="seg small" id="players-seg"></div>
-    </div>
-
-    <div class="card" id="controls">
+    <!-- how it runs: players, pace, viewpoint -->
+    <section class="group" id="controls">
+      <div class="row" id="players-row">
+        <label>players</label>
+        <div class="seg small" id="players-seg"></div>
+      </div>
       <div class="row" id="speed-row">
         <label for="speed">speed</label>
         <input type="range" id="speed" min="0" max="100" value="35">
@@ -46,16 +54,14 @@
         <label>view</label>
         <div class="seg small" id="view-seg"></div>
       </div>
-      <div class="row btns">
-        <button id="new-game">new game</button>
-        <button id="pause">pause</button>
-        <button id="end-turn" class="primary">end turn</button>
-      </div>
-      <div id="status"></div>
-      <div id="scoreboard" class="hidden"></div>
-    </div>
+    </section>
 
-    <div id="players"></div>
+    <!-- the game: turn, players, history -->
+    <section class="group" id="game-state">
+      <div id="status"></div>
+      <div id="players"></div>
+      <div id="scoreboard" class="hidden"></div>
+    </section>
 
     <div id="log" class="card">
       <h2>log</h2>

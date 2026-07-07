@@ -59,7 +59,7 @@ canvas {
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 #scoreboard {
-  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule);
+  padding-top: 10px; border-top: 1px solid var(--rule);
   font: 500 12px var(--mono); font-variant-numeric: tabular-nums;
   color: var(--mid);
   display: flex; gap: 12px; align-items: baseline;
@@ -67,8 +67,9 @@ canvas {
 #scoreboard .w { font-size: 14px; font-weight: 600; }
 #scoreboard .draws { font-size: 10px; margin-left: auto; color: var(--cloudy); }
 
-/* ---- panel ---- */
-#panel { width: 320px; display: flex; flex-direction: column; gap: 16px; }
+/* ---- panel: wide gaps BETWEEN functional groups, tight rows within ---- */
+#panel { width: 320px; display: flex; flex-direction: column; gap: 28px; }
+.group { display: flex; flex-direction: column; gap: 10px; }
 
 header h1 {
   font: 600 16px Inter, sans-serif;
@@ -100,7 +101,6 @@ header h1 .accent { color: var(--amber); }
   padding: 14px;
 }
 .row { display: flex; gap: 10px; align-items: center; }
-.row + .row { margin-top: 12px; }
 .row label {
   font: 500 10px var(--mono);
   letter-spacing: 1.2px; text-transform: uppercase;
@@ -147,9 +147,8 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber); }
 }
 
 #status {
-  margin-top: 12px;
   font: 500 11px var(--mono); font-variant-numeric: tabular-nums;
-  letter-spacing: .3px; color: var(--mid);
+  letter-spacing: .6px; text-transform: uppercase; color: var(--mid);
 }
 
 /* player cards: seat color as a slim left rule */
