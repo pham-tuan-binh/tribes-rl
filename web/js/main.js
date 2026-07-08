@@ -337,6 +337,8 @@ function buildPlayersPanel() {
   }
 }
 
+const prevStat = [];   // per-player {stars, inc} for the change pulse
+let lastPanelTick = 0;
 function refreshPanel() {
   const sig = panelSignature();
   if (sig !== state.panelSig) {
@@ -344,10 +346,9 @@ function refreshPanel() {
     rebuildPanel();
   }
   const active = game.activePlayer();
-  const humanOut = state.mode === 'human' && game.eliminated(0) === 1;
-  $('status').textContent =
-    `turn ${game.tick()}  ·  ${humanOut ? 'you were eliminated · watching'
-      : humanTurn() ? 'YOUR TURN' : `player ${active + 1} thinking`}`;
+  const tick = game.tick();
+  if (tick < lastPanelTick) prevStat.length = 0;   // new game: no false pulses
+  lastPanelTick = tick;
   if (playerEls.length !== game.players) buildPlayersPanel();
   for (let p = 0; p < game.players; p++) {
     const el = playerEls[p];
@@ -355,14 +356,27 @@ function refreshPanel() {
     el.card.classList.toggle('active-turn', !out && p === active);
     el.card.classList.toggle('eliminated', out);
     const inc = game.income(p);   // negative when cities cut off the trade network
+    const stars = game.stars(p);
+    // pulse the card head on notable swings: a star windfall (capture,
+    // ruins) or the economy flipping negative
+    const prev = prevStat[p];
+    if (prev && !out && (stars - prev.stars >= 5 || (inc < 0 && prev.inc >= 0))) {
+      el.head.classList.remove('stat-pulse');
+      void el.head.offsetWidth;   // restart the animation
+      el.head.classList.add('stat-pulse');
+    }
+    prevStat[p] = { stars, inc };
     el.head.textContent = out ?
       `p${p + 1}  eliminated` :
-      `p${p + 1}  ★${game.stars(p)}  ${inc < 0 ? '' : '+'}${inc}/turn  ·  score ${game.score(p)}`;
+      `p${p + 1}  ★${stars}  ${inc < 0 ? '' : '+'}${inc}/turn  ·  score ${game.score(p)}`;
     const bits = game.techs(p) >>> 0;
     for (let t = 0; t < 24; t++)
       el.chips[t].classList.toggle('researched', ((bits >> t) & 1) === 1);
   }
-  $('hint').textContent = humanTurn() ? PHASE_HINT[game.phase()] : '';
+  updateScoreboard();
+  const humanOut = state.mode === 'human' && game.eliminated(0) === 1;
+  $('hint').textContent = humanOut ? 'you were eliminated · watching'
+    : humanTurn() ? PHASE_HINT[game.phase()] : '';
 }
 
 const tally = { wins: [0, 0, 0, 0], draws: 0 };
@@ -388,15 +402,32 @@ function showResult() {
   // toast fades fast at high speed so it never obscures the next game
   const dur = actionsPerSecond() === Infinity ? 700 : Math.max(900, 2500 - state.speed * 18);
   state.bannerUntil = performance.now() + dur;
-  updateScoreboard();
+
+  // summary card: final standings of the last finished game
+  const rows = [];
+  for (let p = 0; p < game.players; p++) {
+    const win = game.result(p) === 0;
+    rows.push(`<div class="sum-row${win ? ' sum-win' : ''}">` +
+      `<b class="lp${p}">p${p + 1}</b> score ${game.finalScore(p)} · ` +
+      `${game.finalKills(p)} kills · ${game.finalCities(p)} cities` +
+      `${game.finalCaps(p) ? ` · ${game.finalCaps(p)} capitals taken` : ''}` +
+      `${win ? ' · winner' : ''}</div>`);
+  }
+  $('summary').innerHTML =
+    `<div class="sec">last game · ${w < 0 ? 'draw' : `p${w + 1} wins`} · t${game.finalTick()}</div>` +
+    rows.join('');
+  $('summary').classList.remove('hidden');
 }
 
+// score line: live turn counter + session tally (rendered with the panel)
 function updateScoreboard() {
   const sb = $('scoreboard');
   const total = tally.wins.reduce((a, b) => a + b, 0) + tally.draws;
-  if (total === 0) { sb.classList.add('hidden'); return; }
-  sb.classList.remove('hidden');
   sb.innerHTML = '';
+  const t = document.createElement('span');
+  t.className = 'turnc';
+  t.textContent = `turn ${game.tick()}`;
+  sb.appendChild(t);
   for (let p = 0; p < game.players; p++) {
     const s = document.createElement('span');
     s.className = 'w';
@@ -483,6 +514,7 @@ function resetGame() {
   $('pause').textContent = 'pause';
   clearLog();
   $('banner').classList.add('hidden');
+  $('summary').classList.add('hidden');
 }
 $('mode-agents').onclick = () => setMode('agents');
 $('mode-human').onclick = () => setMode('human');

@@ -277,6 +277,19 @@ export class Renderer {
       this.strokeCellRot(j, i, PLAYER_COLOR[g.cityOwner(ci)] + '55', 1.5, ctx);
       if (terr[t] === 5) {
         const p = this.rotPoint(j, i);
+        // capitals carry a seat-colored star above the city: the win
+        // condition stays scannable across the whole board
+        if (g.cityCapital(ci)) {
+          ctx.font = `${Math.round(c * 0.34)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = this.rim;
+          ctx.lineWidth = 4;
+          ctx.strokeText('★', p.x + c * R, p.y - c * 0.62);
+          ctx.fillStyle = PLAYER_COLOR[g.cityOwner(ci)];
+          ctx.fillText('★', p.x + c * R, p.y - c * 0.62);
+        }
         const label = `${g.cityLevel(ci)}${g.cityCapital(ci) ? '★' : ''}`;
         const bw = c * 0.4, bh = c * 0.22;
         const bx = p.x + c * R - bw / 2, by = p.y + c * 0.32;

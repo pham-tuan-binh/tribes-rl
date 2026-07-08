@@ -134,13 +134,39 @@ canvas {
 }
 
 #scoreboard {
-  padding-top: 10px; border-top: 1px solid var(--rule);
   font: 500 12px var(--mono); font-variant-numeric: tabular-nums;
   color: var(--mid);
   display: flex; gap: 12px; align-items: baseline;
 }
 #scoreboard .w { font-size: 14px; font-weight: 600; }
+#scoreboard .turnc {
+  font: 500 12px var(--pixel);
+  letter-spacing: .8px; text-transform: uppercase;
+  color: var(--mid); margin-right: 4px;
+}
 #scoreboard .draws { font-size: 10px; margin-left: auto; color: var(--cloudy); }
+
+/* last-game summary card */
+#summary {
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+#summary .sec { margin-bottom: 4px; }
+.sum-row {
+  font: 400 10.5px var(--mono); font-variant-numeric: tabular-nums;
+  letter-spacing: .2px; color: var(--mid);
+}
+.sum-row b { font-weight: 600; }
+.sum-row .lp0 { color: #e2413e; }
+.sum-row .lp1 { color: #3f8ee0; }
+.sum-row .lp2 { color: #c99a2a; }
+.sum-row .lp3 { color: #3da55a; }
+.sum-win { color: var(--text); }
+
+/* stat pulse: a brief amber flash when a player's economy swings */
+@keyframes stat-pulse { 0% { color: var(--amber-lt); } 100% { color: inherit; } }
+.stat-pulse { animation: stat-pulse .9s ease; }
 
 /* ---- panel: wide gaps BETWEEN functional groups, tight rows within ---- */
 #panel { width: 348px; display: flex; flex-direction: column; gap: 26px; }
@@ -213,6 +239,7 @@ header h1 .accent { color: var(--amber); }
   padding: 14px;
 }
 .row { display: flex; gap: 10px; align-items: center; }
+.row.btns button { flex: 1; }   /* action buttons fill the panel width */
 /* when a small seg wraps to two rows, keep the label on the FIRST row's
    midline instead of floating between the rows */
 .row:has(.seg.small) { align-items: flex-start; }

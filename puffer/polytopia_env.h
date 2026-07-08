@@ -188,7 +188,14 @@ typedef struct {
     int32_t episode_steps;
     int32_t max_episode_steps;
     uint32_t rng;            // env-level rng (map seeds, tribe picks)
-    int8_t final_result[ENV_PLAYERS];   // last finished episode (env auto-resets)
+    // last finished episode (the env auto-resets, so finals are snapshotted
+    // here for the website's summary card)
+    int8_t final_result[ENV_PLAYERS];
+    int32_t final_score[ENV_PLAYERS];
+    int32_t final_kills[ENV_PLAYERS];
+    int32_t final_cities[ENV_PLAYERS];
+    int32_t final_caps[ENV_PLAYERS];
+    int32_t final_tick;
 } PolyEnv;
 
 // ---------------------------------------------------------------------------
@@ -483,7 +490,12 @@ static inline void env_end_episode(PolyEnv* e) {
                       / (float)e->game.max_turns;
     float magnitude = 1.0f + e->speed_bonus * (1.0f - tick_frac);
     int np = e->game.num_players;
+    e->final_tick = e->game.tick;
     for (int a = 0; a < ENV_PLAYERS; a++) {
+        e->final_score[a] = e->game.players[a].score;
+        e->final_kills[a] = e->game.players[a].num_kills;
+        e->final_cities[a] = e->game.players[a].num_cities;
+        e->final_caps[a] = e->game.players[a].capitals_taken;
         if (a >= np) {                                // dummy seat: no signal
             e->final_result[a] = RESULT_INCOMPLETE;
         } else if (domination) {
