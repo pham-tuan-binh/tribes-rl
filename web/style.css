@@ -330,12 +330,22 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber-lt); }
   letter-spacing: .6px; text-transform: uppercase;
   color: var(--cloudy); min-height: 1.6em;
 }
-#credit {
-  font: 400 9px var(--mono);
-  letter-spacing: .4px; color: var(--cloudy);
+/* hover helper: [data-tip] shows a small explainer above the element */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute; left: 0; bottom: calc(100% + 6px);
+  z-index: 40;
+  width: max-content; max-width: 240px;
+  padding: 6px 9px;
+  font: 400 10px/1.5 var(--mono);
+  letter-spacing: .2px; text-transform: none;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .14);
+  pointer-events: none;
+  white-space: normal;
 }
-#credit a { color: var(--cloudy); text-decoration: none; border-bottom: 1px solid var(--rule); }
-#credit a:hover { color: var(--amber); }
 .hidden { display: none !important; }
 
 /* entrance: quiet staggered fade, starting when loading completes */

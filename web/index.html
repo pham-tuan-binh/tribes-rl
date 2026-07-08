@@ -53,8 +53,8 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
     <section class="group">
       <div class="sec">game</div>
       <div class="seg" id="mode-row" role="tablist">
-        <button id="mode-agents" class="seg-btn active" role="tab">agents</button>
-        <button id="mode-human" class="seg-btn" role="tab">human</button>
+        <button id="mode-agents" class="seg-btn active" role="tab" data-tip="Watch trained agents play each other.">agents</button>
+        <button id="mode-human" class="seg-btn" role="tab" data-tip="You play seat 1 against the agents.">human</button>
       </div>
       <div class="row btns">
         <button id="new-game">new game</button>
@@ -67,21 +67,21 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
     <section class="group" id="controls">
       <div class="sec">settings</div>
       <div class="row" id="players-row">
-        <label>players</label>
+        <label data-tip="How many tribes are in the match. One model plays them all — switching is instant.">players</label>
         <div class="seg small" id="players-seg"></div>
       </div>
       <div class="row" id="speed-row">
-        <label for="speed">speed</label>
+        <label for="speed" data-tip="Actions per second when agents play. Max runs the game unthrottled.">speed</label>
         <input type="range" id="speed" min="0" max="100" value="35">
         <span id="speed-label" class="pill"></span>
       </div>
       <div class="row" id="temp-row">
-        <label for="temp">temp</label>
+        <label for="temp" data-tip="Sampling temperature. Low = the agent picks its best move (stronger). High = more varied, riskier play.">temp</label>
         <input type="range" id="temp" min="10" max="120" value="50">
         <span id="temp-label" class="pill"></span>
       </div>
       <div class="row" id="view-row">
-        <label>view</label>
+        <label data-tip="Whose fog of war you see. Follow switches to the acting agent each turn; world reveals the whole map.">view</label>
         <div class="seg small" id="view-seg"></div>
       </div>
     </section>
@@ -105,8 +105,6 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
     </section>
 
     <p id="hint"></p>
-
-    <p id="credit">MIT · rules from <a href="https://github.com/GAIGResearch/Tribes" target="_blank" rel="noopener">GAIGResearch/Tribes</a></p>
   </aside>
 </main>
 <script type="module" src="js/main.js"></script>
