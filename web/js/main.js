@@ -452,7 +452,12 @@ function frame(now) {
     refreshPanel();
     flushLog();
   }
-  renderer.draw({ highlightTiles: humanTurn() ? legalTiles() : null, viewer: viewer() });
+  renderer.draw({
+    highlightTiles: humanTurn() ? legalTiles() : null,
+    viewer: viewer(),
+    // glide unit moves only at watchable speeds (or in human games)
+    animate: state.mode === 'human' || actionsPerSecond() <= 8,
+  });
   requestAnimationFrame(frame);
 }
 

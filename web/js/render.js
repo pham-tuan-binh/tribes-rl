@@ -26,6 +26,11 @@ export class Renderer {
     this.sctx = this.scv.getContext('2d');
     this.fogTile = document.createElement('canvas');
     this.fogTile.width = this.fogTile.height = cell;
+    // unit movement animation (slow speeds): unit index -> screen glide
+    this.unitAnim = new Map();
+    this.unitPrev = new Map();
+    this.animEnd = 0;
+    this.animate = false;
     this.refreshTheme();
   }
 
@@ -141,9 +146,17 @@ export class Renderer {
     if (ui && ui.highlightTiles) for (const t of ui.highlightTiles) hl = (Math.imul(hl, 31) + t + 1) | 0;
 
     // frame gate: identical state + view since last frame -> draw nothing
+    // (unless a movement animation is still in flight)
+    const now = performance.now();
     const frameSig = `${g.version}|${viewer}|${sel}|${hl}`;
-    if (frameSig === this.frameSig) return;
+    if (frameSig === this.frameSig && now >= this.animEnd) return;
     this.frameSig = frameSig;
+    this.animate = !!(ui && ui.animate);   // slow speeds only
+    // new game (tick reset): forget unit positions so nothing glides
+    // across the board from the previous match
+    const tk = g.tick();
+    if (tk < this.prevTick) { this.unitAnim.clear(); this.unitPrev.clear(); }
+    this.prevTick = tk;
 
     // per-tile visibility, computed once per changed frame
     const seen = this._seen || (this._seen = new Uint8Array(N * N));
@@ -284,8 +297,32 @@ export class Renderer {
       const type = g.unitType(u);
       const imgSize = (type === 11 || type === 5) ? c : c * 0.75;   // giant/catapult bigger
       const p = this.rotPoint(j, i);
-      const x = p.x + (c * c) / 4 / imgSize;
-      const y = p.y - imgSize / 1.5;
+      let x = p.x + (c * c) / 4 / imgSize;
+      let y = p.y - imgSize / 1.5;
+      // movement glide: when a unit's anchor jumped since the last frame,
+      // ease from the old spot (slow speeds only; key includes type+owner so
+      // a recycled unit slot doesn't glide from a dead unit's position)
+      const key = u * 64 + type * 4 + g.unitOwner(u);
+      const now = performance.now();
+      const prev = this.unitPrev.get(key);
+      if (this.animate && prev && (prev.x !== x || prev.y !== y) && !this.unitAnim.has(key)) {
+        const d = Math.hypot(x - prev.x, y - prev.y);
+        if (d > 4 && d < c * 6) {   // a real move, not a spawn across the map
+          this.unitAnim.set(key, { fx: prev.x, fy: prev.y, t0: now });
+          this.animEnd = Math.max(this.animEnd, now + 160);
+        }
+      }
+      this.unitPrev.set(key, { x, y });
+      const anim = this.unitAnim.get(key);
+      if (anim) {
+        const k = (now - anim.t0) / 160;
+        if (k >= 1) this.unitAnim.delete(key);
+        else {
+          const e = 1 - (1 - k) * (1 - k);   // ease-out
+          x = anim.fx + (x - anim.fx) * e;
+          y = anim.fy + (y - anim.fy) * e;
+        }
+      }
       const owner = g.unitOwner(u);
       const spent = g.unitStatus(u) === 5;
       // sprites are keyed by SEAT color (new art pack: 4 team colors), so a
