@@ -424,10 +424,6 @@ function updateScoreboard() {
   const sb = $('scoreboard');
   const total = tally.wins.reduce((a, b) => a + b, 0) + tally.draws;
   sb.innerHTML = '';
-  const t = document.createElement('span');
-  t.className = 'turnc';
-  t.textContent = `turn ${game.tick()}`;
-  sb.appendChild(t);
   for (let p = 0; p < game.players; p++) {
     const s = document.createElement('span');
     s.className = 'w';
@@ -438,7 +434,7 @@ function updateScoreboard() {
   }
   const d = document.createElement('span');
   d.className = 'draws';
-  d.textContent = `${tally.draws} draws · ${total} games`;
+  d.textContent = `turn ${game.tick()} · ${tally.draws} draws · ${total} games`;
   sb.appendChild(d);
 }
 

@@ -139,11 +139,6 @@ canvas {
   display: flex; gap: 12px; align-items: baseline;
 }
 #scoreboard .w { font-size: 14px; font-weight: 600; }
-#scoreboard .turnc {
-  font: 500 12px var(--pixel);
-  letter-spacing: .8px; text-transform: uppercase;
-  color: var(--mid); margin-right: 4px;
-}
 #scoreboard .draws { font-size: 10px; margin-left: auto; color: var(--cloudy); }
 
 /* last-game summary card */
