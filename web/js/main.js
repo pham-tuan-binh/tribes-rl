@@ -1,7 +1,7 @@
 // polytopia-rl website: two modes.
 //   Agents — agents play each other; speed slider from slow-mo to unthrottled.
 //   Human  — you are red (player 0); agents drive the rest.
-import { Game, verbName, V, TECHS } from './game.js';
+import { Game, verbName, V, TECHS, TERRAIN, RESOURCE, BUILDINGS, UNITS } from './game.js';
 import { Renderer, PLAYER_COLOR } from './render.js';
 import { Assets } from './assets.js';
 import { RandomAgent, TrainedAgent } from './agent.js';
@@ -179,6 +179,48 @@ $('board').addEventListener('click', (ev) => {
   else if (game.phase() > 0) game.cancel(); // illegal tile while selecting = cancel
   if (game.gameOver()) showResult();
 });
+// --- hover tooltip: name what's on the tile (respecting the current fog) ---
+function tileInfo(t) {
+  const v = viewer();
+  if (v >= 0 && !game.visible(v, t)) return 'unexplored';
+  const parts = [];
+  const terr = game.terrain()[t];
+  const ci = game.cityAt()[t];
+  if (terr === 5 && ci >= 0) {
+    parts.push(`${game.cityCapital(ci) ? 'capital' : 'city'} lvl ${game.cityLevel(ci)} · p${game.cityOwner(ci) + 1}`);
+  } else {
+    parts.push(TERRAIN[terr] || '?');
+    if (ci >= 0) parts.push(`p${game.cityOwner(ci) + 1} territory`);
+  }
+  const res = game.resource()[t];
+  if (res >= 0 && RESOURCE[res]) parts.push(RESOURCE[res]);
+  const b = game.building()[t];
+  if (b >= 0 && b !== 19 && BUILDINGS[b]) parts.push(BUILDINGS[b]);
+  if (game.roads()[t]) parts.push('road');
+  const u = game.unitAt(t);
+  if (u >= 0)
+    parts.push(`${UNITS[game.unitType(u)]} p${game.unitOwner(u) + 1} · ${game.unitHp(u)}/${game.unitMaxHp(u)}hp`);
+  return parts.join('  ·  ');
+}
+$('board').addEventListener('mousemove', (ev) => {
+  if (!game || state.loading) return;
+  const rect = ev.target.getBoundingClientRect();
+  const scale = $('board').width / rect.width;
+  const { col, row } = renderer.unproject((ev.clientX - rect.left) * scale,
+                                          (ev.clientY - rect.top) * scale);
+  const tip = $('tip');
+  if (col < 0 || row < 0 || col >= game.size || row >= game.size) {
+    tip.classList.add('hidden');
+    return;
+  }
+  tip.textContent = tileInfo(row * game.size + col);
+  const wrap = $('board-wrap').getBoundingClientRect();
+  tip.style.left = `${ev.clientX - wrap.left + 14}px`;
+  tip.style.top = `${ev.clientY - wrap.top + 16}px`;
+  tip.classList.remove('hidden');
+});
+$('board').addEventListener('mouseleave', () => $('tip').classList.add('hidden'));
+
 window.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && humanTurn() && game.phase() > 0) game.cancel();
 });

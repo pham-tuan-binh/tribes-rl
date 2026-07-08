@@ -120,6 +120,16 @@ canvas {
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* hover tooltip: what is this tile */
+#tip {
+  position: absolute; z-index: 6; pointer-events: none;
+  font: 500 10px var(--mono); letter-spacing: .3px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 4px 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(96, 78, 39, .12);
+}
+
 #scoreboard {
   padding-top: 10px; border-top: 1px solid var(--rule);
   font: 500 12px var(--mono); font-variant-numeric: tabular-nums;
