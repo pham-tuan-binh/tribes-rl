@@ -26,7 +26,7 @@ EMSCRIPTEN_KEEPALIVE int poly_obs_size(void) { return POLY_OBS_SIZE; }
 EMSCRIPTEN_KEEPALIVE int poly_map_size(void) { return ENV_SIZE; }
 EMSCRIPTEN_KEEPALIVE int poly_num_players(void) { return E.game.num_players; }
 
-EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed, int fog) {
+EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed, int players, int fog) {
     memset(&E, 0, sizeof(E));
     E.observations = &obs_buf[0][0];
     E.actions = act_buf;
@@ -35,6 +35,11 @@ EMSCRIPTEN_KEEPALIVE void poly_new_game(unsigned seed, int fog) {
     E.action_mask = &mask_buf[0][0];
     E.num_agents = ENV_PLAYERS;
     E.fog = fog;
+    // one WASM module for every player count: the obs are player-agnostic
+    if (players < 2) players = 2;
+    if (players > ENV_PLAYERS) players = ENV_PLAYERS;
+    E.min_players = players;
+    E.max_players = players;
     E.max_episode_steps = 1 << 30;   // product rules: no practical stop
     E.rng = seed ? seed : 1;
     poly_env_reset(&E);

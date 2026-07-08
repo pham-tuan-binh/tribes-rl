@@ -29,8 +29,12 @@
 
 #define ENV_SIZE 11
 #define ENV_TILES (ENV_SIZE * ENV_SIZE)
+// ENV_PLAYERS is the number of agent SEATS (buffer sizing only). The actual
+// player count is rolled PER EPISODE in [min_players, max_players]; unused
+// seats are dummies that pass. Obs are player-agnostic (pooled opponents),
+// so one model serves every player count.
 #ifndef ENV_PLAYERS
-#define ENV_PLAYERS 2      // build-time: 2..4 (obs/action shapes change with it)
+#define ENV_PLAYERS 4
 #endif
 
 // ---------------------------------------------------------------------------
@@ -72,12 +76,17 @@ static inline bool verb_needs_target(int kind) {
 
 // ---------------------------------------------------------------------------
 // Observation: 10 tile planes + globals, uint8. From the OBSERVING player's
-// perspective (1 = own, 2 = enemy).
+// perspective (1 = own, 2 = enemy). Player-agnostic: the tile planes already
+// encode only mine/enemy, and the globals carry the SELF block plus a pooled
+// summary of all living opponents — the same fixed layout for any player
+// count (and any future count beyond 4).
 // ---------------------------------------------------------------------------
 #define OBS_PLANES 10
-// globals: 4 shared + per-player block (5 scalars + tech bits), self first
-#define OBS_PLAYER_BLOCK (5 + NUM_TECH)
-#define OBS_GLOBALS (4 + ENV_PLAYERS * OBS_PLAYER_BLOCK)
+#define OBS_SELF_BLOCK (5 + NUM_TECH)
+// pooled opponents: alive, seats-until-my-turn, sum/max cities, max score,
+// sum kills, max stars (fog: 0), max tech count (fog: 0)
+#define OBS_OPP_BLOCK 8
+#define OBS_GLOBALS (4 + OBS_SELF_BLOCK + OBS_OPP_BLOCK)
 // named POLY_OBS_SIZE so the binding can define the literal OBS_SIZE macro
 // that PufferLib's build tooling scrapes from binding.c
 #define POLY_OBS_SIZE (OBS_PLANES * ENV_TILES + OBS_GLOBALS)
@@ -165,6 +174,8 @@ typedef struct {
     float reward_capital;    // per enemy capital captured / own capital lost —
                              // the key intermediate objective in multiplayer
     int fog;                 // partial observability (fog of war)
+    int min_players;         // per-episode player count is rolled uniformly
+    int max_players;         // in [min_players, max_players] (2..ENV_PLAYERS)
     int32_t prev_score[ENV_PLAYERS];
     int32_t prev_cities[ENV_PLAYERS];
     int32_t prev_killval[ENV_PLAYERS];
@@ -287,6 +298,7 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     const PolyState* s = &e->game;
     uint8_t* o = e->obs_ptr[agent];
     memset(o, 0, OBS_SIZE);
+    if (agent >= s->num_players) return;   // dummy seat: zero obs, PASS-only mask
     uint8_t* terr = o;
     uint8_t* res = o + ENV_TILES;
     uint8_t* bld = o + 2 * ENV_TILES;
@@ -333,20 +345,46 @@ static inline void env_write_obs(PolyEnv* e, int agent) {
     g[gi++] = (uint8_t)(e->phase == PH_TARGET ? 1 + e->pend_kind : 0);
     g[gi++] = agent == s->active_player ? 1 : 0;
     g[gi++] = (uint8_t)(s->tick > 255 ? 255 : s->tick);
-    // seat-relative player blocks: self first, then opponents in seat order.
-    // Fog hides opponents' economy and tech.
-    for (int k = 0; k < ENV_PLAYERS; k++) {
-        int pl = (agent + k) % ENV_PLAYERS;
-        const Player* p = &s->players[pl];
-        bool hide = s->fog && pl != agent;
-        g[gi++] = hide ? 0 : (uint8_t)(p->stars > 200 ? 200 : p->stars);
-        g[gi++] = (uint8_t)(p->score / 50 > 255 ? 255 : p->score / 50);
-        g[gi++] = (uint8_t)p->num_cities;
-        g[gi++] = (uint8_t)p->num_kills;
-        g[gi++] = (uint8_t)(p->result == RESULT_LOSS ? 200 : p->tribe);  // eliminated marker
-        for (int t = 0; t < NUM_TECH; t++)
-            g[gi++] = hide ? 0 : (p->techs >> t) & 1u;
+
+    // SELF block
+    const Player* me = &s->players[agent];
+    g[gi++] = (uint8_t)(me->stars > 200 ? 200 : me->stars);
+    g[gi++] = (uint8_t)(me->score / 50 > 255 ? 255 : me->score / 50);
+    g[gi++] = (uint8_t)me->num_cities;
+    g[gi++] = (uint8_t)me->num_kills;
+    g[gi++] = (uint8_t)(me->result == RESULT_LOSS ? 200 : me->tribe);
+    for (int t = 0; t < NUM_TECH; t++)
+        g[gi++] = (me->techs >> t) & 1u;
+
+    // pooled OPPONENT block: identity-free summary of everyone else alive.
+    // Fog hides opponents' stars and tech, as before.
+    int np = s->num_players;
+    int alive = 0, sum_cities = 0, max_cities = 0, max_score = 0, sum_kills = 0;
+    int max_stars = 0, max_tech = 0;
+    for (int k = 1; k < np; k++) {
+        const Player* p = &s->players[(agent + k) % np];
+        if (p->result == RESULT_LOSS) continue;
+        alive++;
+        sum_cities += p->num_cities;
+        if (p->num_cities > max_cities) max_cities = p->num_cities;
+        int sc = p->score / 50;
+        if (sc > max_score) max_score = sc;
+        sum_kills += p->num_kills;
+        if (!s->fog) {
+            if (p->stars > max_stars) max_stars = p->stars;
+            int tc = __builtin_popcount((unsigned)p->techs);
+            if (tc > max_tech) max_tech = tc;
+        }
     }
+    g[gi++] = (uint8_t)alive;
+    // turn-order signal pooling loses: seats before I act again (0 = my turn)
+    g[gi++] = (uint8_t)((agent - s->active_player + np) % np);
+    g[gi++] = (uint8_t)(sum_cities > 255 ? 255 : sum_cities);
+    g[gi++] = (uint8_t)max_cities;
+    g[gi++] = (uint8_t)(max_score > 255 ? 255 : max_score);
+    g[gi++] = (uint8_t)(sum_kills > 255 ? 255 : sum_kills);
+    g[gi++] = (uint8_t)(max_stars > 200 ? 200 : max_stars);
+    g[gi++] = (uint8_t)max_tech;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,11 +399,14 @@ static inline int env_income(const PolyState* s, int player) {
 }
 
 static inline void env_new_game(PolyEnv* e) {
+    int np = e->min_players;
+    if (e->max_players > e->min_players)
+        np += (int)(poly_rand(&e->rng) % (uint32_t)(e->max_players - e->min_players + 1));
     int8_t tribes[ENV_PLAYERS];
     for (int p = 0; p < ENV_PLAYERS; p++)
         tribes[p] = (int8_t)poly_rand_int(&e->rng, NUM_TRIBE);
     uint32_t seed = poly_rand(&e->rng) | 1u;
-    poly_reset(&e->game, ENV_PLAYERS, tribes, ENV_SIZE, MODE_CAPITALS, seed, e->fog != 0);
+    poly_reset(&e->game, np, tribes, ENV_SIZE, MODE_CAPITALS, seed, e->fog != 0);
     e->phase = PH_SELECT;
     e->sel_unit = -1; e->sel_city = -1; e->sel_tile = -1;
     e->pend_kind = -1; e->pend_arg = -1;
@@ -407,6 +448,9 @@ static inline void env_wire_default(PolyEnv* e) {
 static inline void poly_env_reset(PolyEnv* e) {
     if (!e->rng) e->rng = 0x9e3779b9u;
     if (!e->max_episode_steps) e->max_episode_steps = 8192;
+    if (e->min_players < 2) e->min_players = 2;
+    if (e->max_players < e->min_players) e->max_players = ENV_PLAYERS;
+    if (e->max_players > ENV_PLAYERS) e->max_players = ENV_PLAYERS;
     if (e->obs_ptr[0] == NULL) env_wire_default(e);
     env_new_game(e);
     env_emit(e);
@@ -438,12 +482,15 @@ static inline void env_end_episode(PolyEnv* e) {
     float tick_frac = (float)(e->game.tick > e->game.max_turns ? e->game.max_turns : e->game.tick)
                       / (float)e->game.max_turns;
     float magnitude = 1.0f + e->speed_bonus * (1.0f - tick_frac);
+    int np = e->game.num_players;
     for (int a = 0; a < ENV_PLAYERS; a++) {
-        if (domination) {
+        if (a >= np) {                                // dummy seat: no signal
+            e->final_result[a] = RESULT_INCOMPLETE;
+        } else if (domination) {
             *e->reward_ptr[a] += e->game.players[a].result == RESULT_WIN ? magnitude : -magnitude;
             e->final_result[a] = (int8_t)e->game.players[a].result;
         } else {
-            *e->reward_ptr[a] -= e->draw_penalty;     // stalling hurts both sides
+            *e->reward_ptr[a] -= e->draw_penalty;     // stalling hurts all sides
             e->final_result[a] = RESULT_INCOMPLETE;   // draw
         }
         *e->terminal_ptr[a] = 1.0f;
@@ -582,26 +629,28 @@ static inline void poly_env_step(PolyEnv* e) {
 
     e->episode_steps++;
 
+    int np = e->game.num_players;
+
     // dense time pressure: each elapsed game turn costs every player
     if (!e->game.game_over && e->turn_penalty != 0.0f && e->game.tick > e->prev_tick) {
         float cost = e->turn_penalty * (float)(e->game.tick - e->prev_tick);
-        for (int a = 0; a < ENV_PLAYERS; a++) *e->reward_ptr[a] -= cost;
+        for (int a = 0; a < np; a++) *e->reward_ptr[a] -= cost;
         e->prev_tick = e->game.tick;
     }
 
     // --- tactical reward shaping (domination-aligned; see field comments) ---
     if (!e->game.game_over) {
-        for (int a = 0; a < ENV_PLAYERS; a++) {
+        for (int a = 0; a < np; a++) {
             const Player* p = &e->game.players[a];
             float r = 0.0f;
 
             // zero-sum transfers are split evenly across opponents
-            const float opp_share = 1.0f / (float)(ENV_PLAYERS - 1);
+            const float opp_share = 1.0f / (float)(np - 1);
 
             int32_t d_city = p->num_cities - e->prev_cities[a];
             if (d_city != 0 && e->reward_city != 0.0f) {
                 r += e->reward_city * (float)d_city;                    // gained/lost cities
-                for (int o = 0; o < ENV_PLAYERS; o++)
+                for (int o = 0; o < np; o++)
                     if (o != a) *e->reward_ptr[o] -= e->reward_city * (float)d_city * opp_share;
             }
             e->prev_cities[a] = p->num_cities;
@@ -640,7 +689,7 @@ static inline void poly_env_step(PolyEnv* e) {
             if (e->shaping != 0.0f) {
                 int32_t d = p->score - e->prev_score[a];
                 r += e->shaping * (float)d;
-                for (int o = 0; o < ENV_PLAYERS; o++)
+                for (int o = 0; o < np; o++)
                     if (o != a) *e->reward_ptr[o] -= e->shaping * (float)d * opp_share;
             }
             e->prev_score[a] = p->score;

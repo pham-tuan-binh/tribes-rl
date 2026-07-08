@@ -1,7 +1,8 @@
 // PufferLib 4.0 binding for polytopia. Lives at ocean/polytopia/binding.c in
 // a PufferLib checkout (with polytopia_env.h and core/ alongside).
-// Build with EXTRA_CFLAGS="-DENV_PLAYERS=4" for the 4-player env
-// (obs size scales with the per-player blocks: 2p=1272, 3p=1301, 4p=1330).
+// The env is player-agnostic: obs size is fixed (pooled-opponent block) and
+// each episode rolls its player count in [min_players, max_players], so one
+// model trains on 2p, 3p and 4p games simultaneously.
 #include "polytopia_env.h"     // defines OBS_SIZE = POLY_OBS_SIZE
 
 #define NUM_ATNS 1
@@ -38,6 +39,12 @@ void my_init(Env* env, Dict* kwargs) {
     env->fog = 1;   // fog of war on by default
     if ((it = dict_get_unsafe(kwargs, "fog")) != NULL)
         env->fog = (int)it->value;
+    env->min_players = 2;
+    if ((it = dict_get_unsafe(kwargs, "min_players")) != NULL)
+        env->min_players = (int)it->value;
+    env->max_players = ENV_PLAYERS;
+    if ((it = dict_get_unsafe(kwargs, "max_players")) != NULL)
+        env->max_players = (int)it->value;
     env->draw_penalty = 0.5f;
     if ((it = dict_get_unsafe(kwargs, "draw_penalty")) != NULL)
         env->draw_penalty = (float)it->value;
