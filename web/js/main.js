@@ -332,9 +332,10 @@ function refreshPanel() {
     const out = game.eliminated(p) === 1;
     el.card.classList.toggle('active-turn', !out && p === active);
     el.card.classList.toggle('eliminated', out);
+    const inc = game.income(p);   // negative when cities cut off the trade network
     el.head.textContent = out ?
       `p${p + 1}  eliminated` :
-      `p${p + 1}  ★${game.stars(p)}  +${game.income(p)}/turn  ·  score ${game.score(p)}`;
+      `p${p + 1}  ★${game.stars(p)}  ${inc < 0 ? '' : '+'}${inc}/turn  ·  score ${game.score(p)}`;
     const bits = game.techs(p) >>> 0;
     for (let t = 0; t < 24; t++)
       el.chips[t].classList.toggle('researched', ((bits >> t) & 1) === 1);
