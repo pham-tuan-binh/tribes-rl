@@ -32,18 +32,23 @@ const assets = await Assets.load('assets', (f) => setLoad('sprites', f * 0.35));
 let game, renderer, agent;
 
 async function loadEngine(players) {
-  state.loading = true;   // freeze the sim loop while the engine swaps out
-  showLoader();
-  setLoad('engine', 0.38);
-  game = await Game.load(players);
-  // observe every applied action (agent AND human) for the shared log
-  const rawAct = game.act;
-  game.act = (a) => { logAction(game.activePlayer(), a, game.phase()); return rawAct(a); };
-  renderer = new Renderer($('board'), game, assets);
-  const trained = await game.loadWeights(players, (f) => setLoad('policy weights', 0.42 + f * 0.58));
-  agent = trained ? new TrainedAgent() : new RandomAgent();
-  document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
-  game.newGame((Math.random() * 2 ** 31) | 0);
+  if (!game) {   // first boot: engine + weights (one module, one policy)
+    state.loading = true;
+    showLoader();
+    setLoad('engine', 0.38);
+    game = await Game.load();
+    // observe every applied action (agent AND human) for the shared log
+    const rawAct = game.act;
+    game.act = (a) => { logAction(game.activePlayer(), a, game.phase()); return rawAct(a); };
+    renderer = new Renderer($('board'), game, assets);
+    const trained = await game.loadWeights((f) => setLoad('policy weights', 0.42 + f * 0.58));
+    agent = trained ? new TrainedAgent() : new RandomAgent();
+    document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
+    hideLoader();
+    state.loading = false;
+  }
+  // player-count switches are instant: same engine, same weights
+  game.newGame((Math.random() * 2 ** 31) | 0, players);
   state.stepAccum = 0;
   state.panelSig = '';
   tally.wins.fill(0); tally.draws = 0;
@@ -51,8 +56,6 @@ async function loadEngine(players) {
   $('banner').classList.add('hidden');
   buildPlayersSeg();
   buildViewSeg();
-  hideLoader();
-  state.loading = false;
 }
 
 function buildPlayersSeg() {
@@ -493,8 +496,6 @@ applyTheme(localStorage.getItem('theme'));
 // --- bootstrap: all declarations above are live now ---
 await loadEngine(state.players);
 requestAnimationFrame(frame);
-// warm the 4p weights into the HTTP cache once the first game is running
-setTimeout(() => { fetch('weights/latest_4p.bin').catch(() => {}); }, 10000);
 
 // debug/test handle (also handy in the browser console)
 window.__poly = {

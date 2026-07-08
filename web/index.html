@@ -11,14 +11,11 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@500;600&family=Pixelify+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<!-- start the big downloads (engine + policy weights) with the page, not after JS boots -->
-<link rel="modulepreload" href="dist/poly2.js">
-<link rel="preload" href="dist/poly2.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
+<!-- start the big downloads (engine + policy weights) with the page, not after
+     JS boots. ONE module + ONE policy serve every player count. -->
+<link rel="modulepreload" href="dist/poly.js">
+<link rel="preload" href="dist/poly.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
 <link rel="preload" href="weights/latest.bin" as="fetch" crossorigin="anonymous">
-<!-- warm the 4-player engine in the background (its 31MB weights are warmed
-     from JS after boot, so they never compete with the first load) -->
-<link rel="prefetch" href="dist/poly4.js">
-<link rel="prefetch" href="dist/poly4.wasm">
 </head>
 <body>
 <div id="loader">

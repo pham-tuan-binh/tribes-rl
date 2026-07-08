@@ -43,12 +43,13 @@ export function verbName(v) {
 }
 
 export class Game {
-  static async load(players = 2) {
+  static async load() {
     const g = new Game();
-    const { default: createPoly } = await import(`../dist/poly${players}.js`);
+    // one module for every player count (player-agnostic engine)
+    const { default: createPoly } = await import('../dist/poly.js');
     g.m = await createPoly();
     const f = (name, ret, args) => g.m.cwrap(name, ret, args);
-    g.newGameRaw = f('poly_new_game', null, ['number', 'number']);
+    g.newGameRaw = f('poly_new_game', null, ['number', 'number', 'number']);
     g.visible = f('poly_visible', 'number', ['number', 'number']);
     // every state mutation flows through act/cancel/newGame; the version
     // counter lets the renderer skip frames where nothing changed
@@ -101,7 +102,11 @@ export class Game {
     return g;
   }
 
-  newGame(seed, fog = true) { this.version++; this.newGameRaw(seed >>> 0, fog ? 1 : 0); this.players = this.numPlayers(); }
+  newGame(seed, players = this.players || 2, fog = true) {
+    this.version++;
+    this.newGameRaw(seed >>> 0, players, fog ? 1 : 0);
+    this.players = this.numPlayers();
+  }
 
   // fresh views each call: WASM memory may grow and detach old buffers
   bytes(ptr, len) { return new Uint8Array(this.m.HEAPU8.buffer, ptr, len); }
@@ -123,8 +128,8 @@ export class Game {
   // fetch trained weights (native trainer .bin); returns true on success.
   // weights are per player count (obs dims differ): latest_3p.bin etc.,
   // with latest.bin as the 2-player default.
-  async loadWeights(players = 2, onProgress = null) {
-    const url = players === 2 ? 'weights/latest.bin' : `weights/latest_${players}p.bin`;
+  async loadWeights(onProgress = null) {
+    const url = 'weights/latest.bin';   // one policy for every player count
     try {
       const resp = await fetch(url);
       if (!resp.ok) return false;

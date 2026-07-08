@@ -77,7 +77,15 @@ static void nets_rebuild(void) {
     net_hidden = 0;
     for (int c = 0; c < 3; c++)
         if (arch_floats(H[c], L[c]) == WEIGHTS->size - 7) { net_hidden = H[c]; net_layers = L[c]; }
-    if (!net_hidden) { net_hidden = 512; net_layers = 3; }   // last resort
+    if (!net_hidden) {
+        // checkpoint doesn't fit this build's obs layout: refuse it (the JS
+        // falls back to random agents) rather than misread the tensors
+        for (int s = 0; s < ENV_PLAYERS; s++) {
+            if (NET[s]) free_puffernet(NET[s]);
+            NET[s] = NULL;
+        }
+        return;
+    }
     int logit_sizes[1] = {ACTION_N};
     for (int s = 0; s < ENV_PLAYERS; s++) {
         if (NET[s]) free_puffernet(NET[s]);
