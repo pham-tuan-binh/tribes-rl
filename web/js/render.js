@@ -29,6 +29,8 @@ export class Renderer {
     // unit movement animation (slow speeds): unit index -> screen glide
     this.unitAnim = new Map();
     this.unitPrev = new Map();
+    this.unitHpPrev = new Map();
+    this.hitAnim = new Map();
     this.animEnd = 0;
     this.animate = false;
     this.refreshTheme();
@@ -155,7 +157,10 @@ export class Renderer {
     // new game (tick reset): forget unit positions so nothing glides
     // across the board from the previous match
     const tk = g.tick();
-    if (tk < this.prevTick) { this.unitAnim.clear(); this.unitPrev.clear(); }
+    if (tk < this.prevTick) {
+      this.unitAnim.clear(); this.unitPrev.clear();
+      this.unitHpPrev.clear(); this.hitAnim.clear();
+    }
     this.prevTick = tk;
 
     // per-tile visibility, computed once per changed frame
@@ -336,6 +341,25 @@ export class Renderer {
       // HP + team in ONE badge: seat-colored box with the current HP,
       // white-rimmed so it reads on any terrain (style of the city badges)
       const hp = g.unitHp(u), maxHp = g.unitMaxHp(u);
+      // hit flash: an expanding ring when HP drops (watchable speeds only)
+      const ph = this.unitHpPrev.get(key);
+      if (this.animate && ph !== undefined && hp < ph && !this.hitAnim.has(key)) {
+        this.hitAnim.set(key, now);
+        this.animEnd = Math.max(this.animEnd, now + 240);
+      }
+      this.unitHpPrev.set(key, hp);
+      const hit = this.hitAnim.get(key);
+      if (hit !== undefined) {
+        const k = (now - hit) / 240;
+        if (k >= 1) this.hitAnim.delete(key);
+        else {
+          ctx.strokeStyle = `rgba(226, 65, 62, ${(1 - k).toFixed(3)})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x + imgSize / 2, y + imgSize / 2, imgSize * (0.35 + k * 0.45), 0, 7);
+          ctx.stroke();
+        }
+      }
       const bh = c * 0.24, bw = Math.max(c * 0.3, bh * 0.6 + String(hp).length * bh * 0.42);
       const bx = x + imgSize - bw * 0.55, by = y - bh * 0.35;
       ctx.fillStyle = this.rim;
