@@ -126,9 +126,8 @@ export class Game {
     return out;
   }
 
-  // fetch trained weights (native trainer .bin); returns true on success.
-  // weights are per player count (obs dims differ): latest_3p.bin etc.,
-  // with latest.bin as the 2-player default.
+  // fetch trained weights (native trainer .bin, optionally fp16-quantized);
+  // returns true on success. One player-agnostic policy serves every count.
   async loadWeights(onProgress = null) {
     const url = 'weights/latest.bin';   // one policy for every player count
     try {
