@@ -168,8 +168,8 @@ canvas {
    so a tall 4p panel never stretches the page: the board stays centered. ---- */
 #panel {
   width: 348px; display: flex; flex-direction: column; gap: 26px;
-  max-height: calc(100vh - 64px);
-  max-height: calc(100svh - 64px);
+  max-height: min(calc(100vh - 128px), 820px);
+  max-height: min(calc(100svh - 128px), 820px);
   overflow-y: auto;
   scrollbar-width: none;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
