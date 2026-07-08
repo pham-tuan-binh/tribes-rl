@@ -67,7 +67,7 @@ body {
 
 main {
   display: flex; gap: 160px; padding: 32px;
-  flex-wrap: wrap; align-items: flex-start; justify-content: center;
+  flex-wrap: wrap; align-items: center; justify-content: center;
 }
 
 /* ---- loading screen: label, thin bar, percentage ---- */
@@ -163,8 +163,19 @@ canvas {
 @keyframes stat-pulse { 0% { color: var(--amber-lt); } 100% { color: inherit; } }
 .stat-pulse { animation: stat-pulse .9s ease; }
 
-/* ---- panel: wide gaps BETWEEN functional groups, tight rows within ---- */
-#panel { width: 348px; display: flex; flex-direction: column; gap: 26px; }
+/* ---- panel: wide gaps BETWEEN functional groups, tight rows within.
+   Bounded to the viewport and scrollable (hidden scrollbar, bottom fade),
+   so a tall 4p panel never stretches the page: the board stays centered. ---- */
+#panel {
+  width: 348px; display: flex; flex-direction: column; gap: 26px;
+  max-height: calc(100vh - 64px);
+  max-height: calc(100svh - 64px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
+#panel::-webkit-scrollbar { display: none; }
 .group { display: flex; flex-direction: column; gap: 10px; }
 
 /* section header: the name, then the divider runs to the edge */
@@ -390,7 +401,11 @@ body.ready #panel > *:nth-child(6) { animation-delay: .4s; }
     gap: 20px; padding: 16px 12px 32px;
   }
   canvas { max-width: min(100%, 70vh); }
-  #panel { width: 100%; max-width: 440px; }
+  #panel {
+    width: 100%; max-width: 440px;
+    max-height: none;                    /* mobile: natural page scroll */
+    -webkit-mask-image: none; mask-image: none;
+  }
   .seg-btn { padding: 10px 0; }         /* bigger touch targets */
   button { padding: 10px 14px; }
   #verb-buttons button { padding: 9px 12px; }
