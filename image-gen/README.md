@@ -18,14 +18,10 @@ cp .env.example .env          # put your OPENAI_API_KEY in it
 
 That API key is the only thing you configure.
 
-`gpt-image-1` already outputs transparent backgrounds, so the local `rembg`
-cleanup pass is optional. To enable it, install the extra and pass `--extra`:
-
-```bash
-uv run --extra rembg generate.py --only warrior --bg always
-```
-
-Without it, the pipeline trusts the model's transparency (and says so).
+Image models render sprites on an opaque background, so **background removal is
+a built-in step**: every cut-out sprite goes through a local `rembg` pass
+(installed by `uv sync`, no per-image cost). Terrain tiles and soft overlays
+(fog/shine) skip it automatically. Control it with `--bg always|auto|never`.
 
 ## Sample a few and eyeball them
 
@@ -52,6 +48,29 @@ uv run generate.py --only knight --fidelity high   # hug the original silhouette
 uv run generate.py --limit 5                 # first 5 of the default set
 uv run generate.py --group terrain           # phase-2, seamless tiles (see PLAN)
 ```
+
+## Providers — OpenAI or OpenRouter
+
+Default is OpenAI `gpt-image-1` (direct). You can also route through the
+OpenRouter Unified Image API with one key — its default model is
+`openai/gpt-image-2` (OpenAI's image model via OpenRouter), and you can switch
+to Gemini / Seedream / FLUX with `--model`:
+
+```bash
+# OpenAI direct (default):
+uv run generate.py --only warrior
+
+# OpenRouter, default model openai/gpt-image-2:
+uv run generate.py --provider openrouter --only warrior
+
+# any other OpenRouter image model:
+uv run generate.py --provider openrouter \
+    --model bytedance-seed/seedream-4.5 --only warrior
+```
+
+Background removal runs regardless of provider/model, so the choice is about
+art style and cost, not transparency. Reference-guided editing (the existing
+asset as a base) works on both — OpenRouter via `input_references`.
 
 ## What you get
 

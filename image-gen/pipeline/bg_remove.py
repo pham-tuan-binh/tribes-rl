@@ -1,12 +1,13 @@
-"""Background removal — the cleanup pass after generation.
+"""Background removal — the step that makes sprites transparent.
 
-gpt-image-1's native transparent background is usually clean, but can leave a
-faint matte halo or fail on busy sprites. `rembg` (U^2-Net, runs locally, free,
-no per-image cost) is our tool of choice for a deterministic second pass.
+Image models render the subject on an opaque background (see style.TECH_SPRITE,
+which asks for a plain flat neutral one). `rembg` (U^2-Net, runs locally, free,
+no per-image cost) is our tool of choice to segment the subject and drop the
+background. This is a mandatory pass for cut-out sprite categories.
 
-Strategy: if the image already has a mostly-transparent border we trust the
-model's cutout and skip rembg; otherwise we run rembg. Force either way with
-the `mode` argument.
+Strategy: `always` (default) runs rembg on every sprite. `auto` skips it only
+when the border already looks transparent (e.g. a model that did emit alpha).
+`never` leaves the raw image untouched.
 """
 from __future__ import annotations
 
@@ -29,15 +30,30 @@ def _already_cut_out(img: Image.Image, thresh: int = 8) -> bool:
     return (sum(edge) / len(edge)) < thresh
 
 
+import threading
+
+_SESSION = None
+_SESSION_LOCK = threading.Lock()
+
+
 def _rembg(png_bytes: bytes) -> bytes | None:
-    """Run rembg if the optional dep is installed; else None (graceful skip)."""
+    """Run rembg if importable; else None (graceful skip).
+
+    One shared U^2-Net session (created under a lock): loading the model per
+    call is slow and memory-heavy, and generation now runs multi-threaded.
+    onnxruntime sessions are thread-safe for inference.
+    """
+    global _SESSION
     try:
-        from rembg import remove  # lazy: keep --dry-run / core install import-free
+        from rembg import new_session, remove  # lazy import: keeps --dry-run fast
     except ImportError:
-        print("      (rembg not installed — trusting gpt-image-1 transparency; "
-              "`uv sync --extra rembg` to enable the cleanup pass)")
+        print("      (rembg unavailable — leaving background intact; run "
+              "`uv sync` to install it)")
         return None
-    return remove(png_bytes)
+    with _SESSION_LOCK:
+        if _SESSION is None:
+            _SESSION = new_session()
+    return remove(png_bytes, session=_SESSION)
 
 
 def cutout(png_bytes: bytes, mode: str = "auto") -> bytes:

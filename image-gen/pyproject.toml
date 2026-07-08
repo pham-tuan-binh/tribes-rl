@@ -5,17 +5,12 @@ description = "Realistic Age-of-Empires-style asset pack pipeline (gpt-image-1 +
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "openai>=1.40.0",  # gpt-image-1 (images.generate / images.edit)
-    "pillow>=10.0.0",  # trim / center / resize / recolor
-    "numpy>=1.24.0",   # recolor math
-]
-
-# Optional: local background-removal cleanup pass. gpt-image-1 already emits a
-# transparent background, so rembg is a safety net, not required. Its dep chain
-# (onnxruntime/numba) is heavy — install only if you need it:
-#   uv sync --extra rembg
-[project.optional-dependencies]
-rembg = [
+    "openai>=1.40.0",      # gpt-image-1 (images.generate / images.edit)
+    "httpx>=0.27.0",       # OpenRouter Unified Image API (raw REST)
+    "pillow>=10.0.0",      # trim / center / resize / recolor
+    "numpy>=1.24.0",       # recolor math
+    # Background removal is a mandatory step — image models don't reliably emit
+    # a transparent background, so every sprite goes through rembg.
     "rembg>=2.0.65",
     "onnxruntime>=1.16.0",
     # rembg -> pymatting -> numba; without floors uv backtracks to numba 0.53

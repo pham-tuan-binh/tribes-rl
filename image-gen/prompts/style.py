@@ -18,13 +18,16 @@ template to re-tune a whole class of assets. Only manifest.py knows subjects.
 # L0 — global art direction. This is the single knob that defines "the look".
 # ---------------------------------------------------------------------------
 STYLE_CORE = (
-    "Realistic hand-painted real-time-strategy game art in the visual tradition "
-    "of Age of Empires II: Definitive Edition and Age of Empires IV. "
-    "Grounded, believable proportions and materials — worn metal, rough timber, "
-    "dyed wool, stone and dirt — with rich painterly texture and soft physically "
-    "plausible lighting from the upper-left. Muted, earthy, historically-grounded "
-    "color palette; high detail but readable at small size. NOT cartoon, NOT cel "
-    "shaded, NOT flat vector, NOT pixel art, NOT anime, NOT toy-like."
+    "Vibrant pre-rendered 3D sprite art in the visual tradition of Age of Empires "
+    "(Age of Empires II: Definitive Edition and Age of Empires IV): objects modeled "
+    "in 3D and rendered down to crisp 2D sprites, with real dimensional volume and "
+    "depth, richly shaded matte-to-satin materials, rich saturated but naturalistic "
+    "color, and strong clear directional lighting from the upper-left with soft "
+    "baked shadows grounding each object. Grounded, historically-plausible subjects "
+    "and materials — metal, timber, thatch, cloth, stone — with clean readable "
+    "silhouettes that stay legible "
+    "at small size. NOT flat, NOT hand-painted, NOT painterly, NOT cartoon, NOT cel "
+    "shaded, NOT flat vector, NOT pixel art, NOT anime."
 )
 
 # ---------------------------------------------------------------------------
@@ -43,10 +46,12 @@ CATEGORY = {
     ),
     # Structures, isometric, sitting on the ground plane.
     "building": (
-        "A single game building sprite rendered in isometric 3/4 view (camera "
-        "~45 degrees above and rotated 45 degrees), the whole structure centered "
-        "and complete within the frame, sitting on a small implied ground "
-        "footprint with no surrounding terrain."
+        "A single game building sprite in a standard Age-of-Empires isometric 3/4 "
+        "view: the camera looks down from about 30-45 degrees, and the structure "
+        "stands UPRIGHT and level — vertical walls stay vertical. Do NOT rotate, "
+        "tilt, skew, or diamond-orient the building; it is not lying at an angle. "
+        "The whole structure is centered and complete within the frame, sitting on "
+        "a small implied ground footprint with no surrounding terrain."
     ),
     # Small world objects / gatherable resources sitting on a tile.
     "resource": (
@@ -68,7 +73,14 @@ CATEGORY = {
         "realistic material and lighting but composed as a crisp readable HUD "
         "glyph with a subtle rim so it stays legible on any background."
     ),
-    # Non-tiling overlays (fog, selection shine, walls, roads).
+    # Standalone full-bleed opaque tile (e.g. fog of war) — fills the diamond,
+    # no variants, no re-skin. Seamless so adjacent copies blend.
+    "tile": (
+        "A single seamless full-bleed square map tile, filling the entire frame "
+        "edge to edge with an even tileable surface and no central subject, lit "
+        "flatly and evenly so adjacent copies blend."
+    ),
+    # Non-tiling overlays (walls). fog is a 'tile'; shine kept as original.
     "overlay": (
         "A single game map overlay element rendered from a raised 3/4 top-down "
         "angle, centered and self-contained, meant to be layered on top of the "
@@ -78,14 +90,20 @@ CATEGORY = {
 
 # ---------------------------------------------------------------------------
 # Lx — shared technical constraints. Appended to every prompt. Two flavors:
-# transparent cut-out sprites vs. edge-to-edge terrain tiles.
+# cut-out sprites vs. edge-to-edge terrain tiles.
+#
+# NOTE: we do NOT rely on the model emitting a transparent background — it goes
+# through the rembg background-removal pass (pipeline/bg_remove.py). So we ask
+# for a PLAIN, FLAT, EVENLY-LIT background that the segmenter can lift cleanly,
+# with the subject clearly separated from it (no cast shadow bleeding into it).
 # ---------------------------------------------------------------------------
 TECH_SPRITE = (
-    "The subject is fully isolated on a 100% transparent background with clean "
-    "anti-aliased edges and no ground shadow, no drop shadow, no vignette, no "
-    "backdrop. Exactly one subject, centered, with a small even margin. "
-    "Absolutely no text, no letters, no numbers, no logos, no watermark, no "
-    "UI frames, no borders, no color swatches, no grid."
+    "Exactly one subject, centered, in full view with a small even margin, on a "
+    "plain flat evenly-lit neutral studio background — a single uniform muted "
+    "grey, with no scenery, no ground plane, no floor, no horizon, no props and "
+    "no cast shadow touching the edges — so the subject is cleanly separable "
+    "from the background. Absolutely no text, no letters, no numbers, no logos, "
+    "no watermark, no UI frames, no borders, no color swatches, no grid."
 )
 TECH_TILE = (
     "Fill the whole square frame — no transparency, no border, no vignette, no "
@@ -95,7 +113,7 @@ TECH_TILE = (
 )
 
 # categories that want the tile tech block instead of the sprite one
-_TILE_CATEGORIES = {"terrain"}
+_TILE_CATEGORIES = {"terrain", "tile"}
 
 
 def compose(category: str, subject: str) -> str:

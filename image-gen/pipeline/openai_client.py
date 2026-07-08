@@ -36,28 +36,33 @@ def _decode(resp) -> bytes:
     return base64.b64decode(resp.data[0].b64_json)
 
 
-def generate(prompt: str, *, size: str = "1024x1024",
+def generate(prompt: str, *, model: str = MODEL, size: str = "1024x1024",
              transparent: bool = True, quality: str = "high") -> bytes:
     """Text-to-image. Returns raw PNG bytes."""
-    kwargs = dict(model=MODEL, prompt=prompt, size=size, n=1, quality=quality)
+    kwargs = dict(model=model, prompt=prompt, size=size, n=1, quality=quality)
     if transparent:
         kwargs["background"] = "transparent"
     return _decode(_client().images.generate(**kwargs))
 
 
-def edit(prompt: str, ref_path: str | Path, *, size: str = "1024x1024",
-         transparent: bool = True, quality: str = "high",
+def edit(prompt: str, ref_paths, *, model: str = MODEL,
+         size: str = "1024x1024", transparent: bool = True, quality: str = "high",
          input_fidelity: str = "low") -> bytes:
-    """Reference-guided image. `ref_path` is the existing asset. Returns PNG bytes.
+    """Reference-guided image. `ref_paths` is one path or a list (e.g. the
+    existing asset + a style reference). Returns PNG bytes.
 
-    input_fidelity="low" keeps the reference as loose compositional guidance
-    (we want *new* realistic art, not a faithful copy of the old sprite). Bump
-    to "high" if you want the new art to hug the original silhouette tightly.
+    input_fidelity="low" keeps the references as loose guidance (we want *new*
+    art, not a faithful copy). Bump to "high" to hug the originals tightly.
     """
-    ref = Path(ref_path)
-    with ref.open("rb") as fh:
-        kwargs = dict(model=MODEL, prompt=prompt, image=[fh], size=size, n=1,
+    if isinstance(ref_paths, (str, Path)):
+        ref_paths = [ref_paths]
+    handles = [Path(p).open("rb") for p in ref_paths]
+    try:
+        kwargs = dict(model=model, prompt=prompt, image=handles, size=size, n=1,
                       quality=quality, input_fidelity=input_fidelity)
         if transparent:
             kwargs["background"] = "transparent"
         return _decode(_client().images.edit(**kwargs))
+    finally:
+        for h in handles:
+            h.close()

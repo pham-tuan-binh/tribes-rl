@@ -427,30 +427,27 @@ name = "polytopia-image-gen"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "numpy" },
-    { name = "openai" },
-    { name = "pillow" },
-]
-
-[package.optional-dependencies]
-rembg = [
+    { name = "httpx" },
     { name = "llvmlite" },
     { name = "numba" },
+    { name = "numpy" },
     { name = "onnxruntime" },
+    { name = "openai" },
+    { name = "pillow" },
     { name = "rembg" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "llvmlite", marker = "extra == 'rembg'", specifier = ">=0.42" },
-    { name = "numba", marker = "extra == 'rembg'", specifier = ">=0.59" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "llvmlite", specifier = ">=0.42" },
+    { name = "numba", specifier = ">=0.59" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "onnxruntime", marker = "extra == 'rembg'", specifier = ">=1.16.0" },
+    { name = "onnxruntime", specifier = ">=1.16.0" },
     { name = "openai", specifier = ">=1.40.0" },
     { name = "pillow", specifier = ">=10.0.0" },
-    { name = "rembg", marker = "extra == 'rembg'", specifier = ">=2.0.65" },
+    { name = "rembg", specifier = ">=2.0.65" },
 ]
-provides-extras = ["rembg"]
 
 [[package]]
 name = "pooch"
