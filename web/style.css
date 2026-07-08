@@ -213,6 +213,10 @@ header h1 .accent { color: var(--amber); }
   padding: 14px;
 }
 .row { display: flex; gap: 10px; align-items: center; }
+/* when a small seg wraps to two rows, keep the label on the FIRST row's
+   midline instead of floating between the rows */
+.row:has(.seg.small) { align-items: flex-start; }
+.row:has(.seg.small) > label { padding-top: 9px; }
 .row label {
   font: 500 10px var(--mono);
   letter-spacing: 1.2px; text-transform: uppercase;
