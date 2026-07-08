@@ -54,6 +54,7 @@ async function loadEngine(players) {
     state.loading = false;
   }
   // player-count switches are instant: same engine, same weights
+  if (state.viewpoint >= players) state.viewpoint = -2;  // stale pN view = all fog
   game.newGame((Math.random() * 2 ** 31) | 0, players);
   state.stepAccum = 0;
   state.panelSig = '';
@@ -211,12 +212,12 @@ function tileInfo(t) {
     parts.push(`${UNITS[game.unitType(u)]} p${game.unitOwner(u) + 1} · ${game.unitHp(u)}/${game.unitMaxHp(u)}hp`);
   return parts.join('  ·  ');
 }
-$('board').addEventListener('mousemove', (ev) => {
+function showTipAt(clientX, clientY) {
   if (!game || state.loading) return;
-  const rect = ev.target.getBoundingClientRect();
+  const rect = $('board').getBoundingClientRect();
   const scale = $('board').width / rect.width;
-  const { col, row } = renderer.unproject((ev.clientX - rect.left) * scale,
-                                          (ev.clientY - rect.top) * scale);
+  const { col, row } = renderer.unproject((clientX - rect.left) * scale,
+                                          (clientY - rect.top) * scale);
   const tip = $('tip');
   if (col < 0 || row < 0 || col >= game.size || row >= game.size) {
     tip.classList.add('hidden');
@@ -224,11 +225,24 @@ $('board').addEventListener('mousemove', (ev) => {
   }
   tip.textContent = tileInfo(row * game.size + col);
   const wrap = $('board-wrap').getBoundingClientRect();
-  tip.style.left = `${ev.clientX - wrap.left + 14}px`;
-  tip.style.top = `${ev.clientY - wrap.top + 16}px`;
+  tip.style.left = `${clientX - wrap.left + 14}px`;
+  tip.style.top = `${clientY - wrap.top + 16}px`;
   tip.classList.remove('hidden');
-});
+}
+$('board').addEventListener('mousemove', (ev) => showTipAt(ev.clientX, ev.clientY));
 $('board').addEventListener('mouseleave', () => $('tip').classList.add('hidden'));
+// touch: long-press a tile to name it (hover doesn't exist on phones)
+let pressTimer = 0, tipHide = 0;
+$('board').addEventListener('touchstart', (ev) => {
+  const t = ev.touches[0];
+  clearTimeout(tipHide);
+  pressTimer = setTimeout(() => {
+    showTipAt(t.clientX, t.clientY);
+    tipHide = setTimeout(() => $('tip').classList.add('hidden'), 2500);
+  }, 400);
+}, { passive: true });
+for (const k of ['touchend', 'touchmove', 'touchcancel'])
+  $('board').addEventListener(k, () => clearTimeout(pressTimer), { passive: true });
 
 window.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && humanTurn() && game.phase() > 0) game.cancel();
@@ -324,8 +338,10 @@ function refreshPanel() {
     rebuildPanel();
   }
   const active = game.activePlayer();
+  const humanOut = state.mode === 'human' && game.eliminated(0) === 1;
   $('status').textContent =
-    `turn ${game.tick()}  ·  ${humanTurn() ? 'YOUR TURN' : `player ${active + 1} thinking`}`;
+    `turn ${game.tick()}  ·  ${humanOut ? 'you were eliminated · watching'
+      : humanTurn() ? 'YOUR TURN' : `player ${active + 1} thinking`}`;
   if (playerEls.length !== game.players) buildPlayersPanel();
   for (let p = 0; p < game.players; p++) {
     const el = playerEls[p];
