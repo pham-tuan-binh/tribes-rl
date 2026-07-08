@@ -245,6 +245,11 @@ for (const k of ['touchend', 'touchmove', 'touchcancel'])
   $('board').addEventListener(k, () => clearTimeout(pressTimer), { passive: true });
 
 window.addEventListener('keydown', (ev) => {
+  if (ev.key === ' ' && state.mode === 'agents') {   // space = pause/resume
+    ev.preventDefault();
+    $('pause').click();
+  }
+  if (ev.key === 'Enter' && humanTurn()) $('end-turn').click();
   if (ev.key === 'Escape' && humanTurn() && game.phase() > 0) game.cancel();
 });
 
@@ -468,6 +473,8 @@ function resetGame() {
   game.newGame((Math.random() * 2 ** 31) | 0);
   state.stepAccum = 0;
   state.panelSig = '';
+  state.paused = false;                 // a fresh game always plays
+  $('pause').textContent = 'pause';
   clearLog();
   $('banner').classList.add('hidden');
 }

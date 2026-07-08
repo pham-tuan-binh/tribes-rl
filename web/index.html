@@ -35,7 +35,7 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
 </div>
 <main>
   <div id="board-wrap">
-    <canvas id="board" width="704" height="704"></canvas>
+    <canvas id="board" width="704" height="704" aria-label="game board"></canvas>
     <div id="banner" class="hidden"></div>
     <div id="tip" class="hidden"></div>
   </div>
@@ -100,6 +100,8 @@ try { const t = localStorage.getItem('theme'); if (t) document.documentElement.d
     </section>
 
     <p id="hint"></p>
+
+    <p id="credit">MIT · rules from <a href="https://github.com/GAIGResearch/Tribes" target="_blank" rel="noopener">GAIGResearch/Tribes</a></p>
   </aside>
 </main>
 <script type="module" src="js/main.js"></script>

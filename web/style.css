@@ -330,6 +330,12 @@ input[type=range]:hover::-webkit-slider-thumb { background: var(--amber-lt); }
   letter-spacing: .6px; text-transform: uppercase;
   color: var(--cloudy); min-height: 1.6em;
 }
+#credit {
+  font: 400 9px var(--mono);
+  letter-spacing: .4px; color: var(--cloudy);
+}
+#credit a { color: var(--cloudy); text-decoration: none; border-bottom: 1px solid var(--rule); }
+#credit a:hover { color: var(--amber); }
 .hidden { display: none !important; }
 
 /* entrance: quiet staggered fade, starting when loading completes */
