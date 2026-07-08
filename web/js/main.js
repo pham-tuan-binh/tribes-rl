@@ -348,16 +348,18 @@ function showResult() {
   const el = $('banner');
   let w = -1;
   for (let p = 0; p < game.players; p++) if (game.result(p) === 0) w = p;
+  // theme bg + colored border (the old inline dark background made draw
+  // text unreadable after the redesign)
   if (w < 0) {
     tally.draws++;
     el.textContent = 'draw';
-    el.style.background = 'rgba(31,36,48,.88)';
+    el.style.borderColor = 'var(--cloudy)';
   } else {
     tally.wins[w]++;
     el.textContent = state.mode === 'human'
       ? (w === 0 ? 'you win!' : 'you lose')
       : `p${w + 1} wins · turn ${lastTick}`;
-    el.style.background = PLAYER_COLOR[w];
+    el.style.borderColor = PLAYER_COLOR[w];
   }
   el.classList.remove('hidden');
   // toast fades fast at high speed so it never obscures the next game
