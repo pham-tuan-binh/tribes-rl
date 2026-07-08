@@ -1,5 +1,7 @@
 # tribes-rl
 
+![tribes-rl](docs/site.png)
+
 An open-source reimplementation of *The Battle of Polytopia*, built for reinforcement learning. The game rules are ported from [GAIGResearch/Tribes](https://github.com/GAIGResearch/Tribes), the academic Java framework for Polytopia, and the port is verified move-for-move against it with golden traces. Full credit to the Tribes authors: without their implementation this project would not exist.
 
 One C engine, two targets:
