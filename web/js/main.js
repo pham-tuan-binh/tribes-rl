@@ -50,6 +50,7 @@ async function loadEngine(players) {
       setLoad(`policy ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} mb`, 0.42 + f * 0.58));
     agent = trained ? new TrainedAgent() : new RandomAgent();
     document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
+    applyTemp();   // engine boots at its default; sync to the slider
     hideLoader();
     state.loading = false;
   }
@@ -491,6 +492,9 @@ function setMode(m) {
   $('mode-human').classList.toggle('active', m === 'human');
   $('speed-row').classList.toggle('hidden', m === 'human');
   $('view-row').classList.toggle('hidden', m === 'human');
+  // greedy opponent for human games, varied play for spectating
+  $('temp').value = m === 'human' ? 20 : 50;
+  $('temp').dispatchEvent(new Event('input'));
   // only show controls that exist in this mode
   $('end-turn').classList.toggle('hidden', m !== 'human');
   $('pause').classList.toggle('hidden', m === 'human');
@@ -511,6 +515,16 @@ speedInput.oninput = () => { state.speed = +speedInput.value; $('speed-label').t
 // game itself keeps running)
 speedInput.onchange = () => { state.stepAccum = 0; };
 speedInput.oninput();
+
+// sampling temperature: lower = greedier/stronger play, higher = more
+// variety. Human games default greedy so the opponent plays its best.
+const tempInput = $('temp');
+function applyTemp() {
+  $('temp-label').textContent = (+tempInput.value / 100).toFixed(2);
+  if (game) game.setTemperature(+tempInput.value / 100);
+}
+tempInput.oninput = applyTemp;
+applyTemp();
 
 // --- theme: system preference by default; the toggle pins light/dark ---
 const themeQuery = matchMedia('(prefers-color-scheme: dark)');

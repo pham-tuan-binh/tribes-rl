@@ -15,4 +15,7 @@ emcc -O3 -std=c11 \
 # of probing every optional variant (hundreds of 404s otherwise)
 (cd assets && find . -name '*.png' | sed 's|^\./||' | sort \
   | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' > manifest.json)
+# sprite atlas (one download instead of ~240); atlas.png/json are committed,
+# so this step just refreshes them when Pillow is available
+python3 pack_atlas.py 2>/dev/null || echo "(pack_atlas skipped: Pillow not available)"
 echo "built dist/poly.js ($(du -h dist/poly.wasm | cut -f1)) + assets/manifest.json"

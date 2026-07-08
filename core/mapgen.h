@@ -335,7 +335,9 @@ static inline void poly_reset(PolyState* s, int num_players, const int8_t* tribe
         pl->tribe = tribes[p];
         pl->capital = -1;
         pl->result = RESULT_INCOMPLETE;
-        pl->stars = INITIAL_STARS;
+        // product rule: later seats start with +1 star per position to soften
+        // the measured first-mover advantage (Java/trace behavior unchanged)
+        pl->stars = INITIAL_STARS + (s->tribes_compat ? 0 : p);
         if (!fog) memset(pl->obs, 0xff, sizeof(pl->obs));   // full observability
 
         // initial tech + its score (Tribe.init)

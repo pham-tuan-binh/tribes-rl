@@ -43,18 +43,40 @@ function deborder(img, inset = 3) {
 export class Assets {
   static async load(base = 'assets', onProgress = null) {
     const a = new Assets();
+    // Preferred path: ONE atlas download, sprites sliced back out as
+    // ImageBitmaps. Fallback: per-file loading via manifest.json.
+    let atlas = null, frames = null;
+    try {
+      frames = await fetch(`${base}/atlas.json`).then((r) => r.ok ? r.json() : null);
+      if (frames) {
+        const blob = await fetch(`${base}/atlas.webp`).then((r) => r.ok ? r.blob() : null);
+        if (blob) atlas = await createImageBitmap(blob);
+        else frames = null;
+      }
+    } catch { frames = null; }
     // manifest of files that actually exist (written by web/build.sh), so we
     // never request the hundreds of optional variants that aren't there
-    const have = new Set(await fetch(`${base}/manifest.json`).then((r) => r.ok ? r.json() : []).catch(() => []));
+    const have = frames
+      ? new Set(Object.keys(frames))
+      : new Set(await fetch(`${base}/manifest.json`).then((r) => r.ok ? r.json() : []).catch(() => []));
     const jobs = [];
+    const fetchOne = (rel, src) => {
+      if (atlas) {
+        const [x, y, w, h] = frames[rel];
+        return createImageBitmap(atlas, x, y, w, h);
+      }
+      return load(src);
+    };
     const put = (obj, key, src) => {
-      if (have.size && !have.has(src.slice(base.length + 1))) return;
-      jobs.push(load(src).then((img) => { obj[key] = img; }));
+      const rel = src.slice(base.length + 1);
+      if (have.size && !have.has(rel)) return;
+      jobs.push(fetchOne(rel, src).then((img) => { obj[key] = img; }));
     };
 
     const putTile = (obj, key, src) => {
-      if (have.size && !have.has(src.slice(base.length + 1))) return;
-      jobs.push(load(src).then((img) => { obj[key] = deborder(img); }));
+      const rel = src.slice(base.length + 1);
+      if (have.size && !have.has(rel)) return;
+      jobs.push(fetchOne(rel, src).then((img) => { obj[key] = deborder(img); }));
     };
     a.terrain = {};      // base tile per terrain id
     a.variants = {};     // `${terrainId}|${suffix}` -> image

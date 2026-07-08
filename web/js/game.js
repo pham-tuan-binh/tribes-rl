@@ -75,6 +75,7 @@ export class Game {
     g.gameOver = f('poly_game_over', 'number', []);
     g.result = f('poly_result', 'number', ['number']);
     g.eliminated = f('poly_eliminated', 'number', ['number']);
+    g.setTemperature = f('poly_set_temperature', null, ['number']);
     g.stars = f('poly_stars', 'number', ['number']);
     g.score = f('poly_score', 'number', ['number']);
     g.income = f('poly_income', 'number', ['number']);
