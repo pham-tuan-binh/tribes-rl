@@ -198,9 +198,14 @@ header h1 .accent { color: var(--amber); }
   font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--amber);
 }
-/* small segs (view/players) wrap instead of squishing when 4p adds pills */
-.seg.small { flex: 1; flex-wrap: wrap; }
-.seg.small .seg-btn { font-size: 11px; padding: 6px 0; min-width: 64px; }
+/* small segs (view/players): an even grid, so extra 4p pills wrap into a
+   second row at the SAME size as everything else */
+.seg.small {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+}
+.seg.small .seg-btn { font-size: 11px; padding: 6px 0; }
 
 /* cards */
 .card {
