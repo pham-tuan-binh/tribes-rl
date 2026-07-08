@@ -97,6 +97,7 @@ export class Game {
     g.size = f('poly_map_size', 'number', [])();
     g.tiles = g.size * g.size;
     g.actionN = f('poly_action_n', 'number', [])();
+    g.obsSize = f('poly_obs_size', 'number', [])();
     g.numPlayers = f('poly_num_players', 'number', []);
     g.players = 2;   // refreshed after newGame
     return g;
@@ -146,7 +147,7 @@ export class Game {
           if (done) break;
           chunks.push(value);
           got += value.length;
-          onProgress(Math.min(1, got / total));
+          onProgress(Math.min(1, got / total), got, total);
         }
         data = new Uint8Array(got);
         let off = 0;
@@ -154,11 +155,44 @@ export class Game {
       } else {
         data = new Uint8Array(await resp.arrayBuffer());
       }
+      data = this.dequantize(data);
       const ptr = this.weightsAlloc(data.length);
       this.m.HEAPU8.set(data, ptr);
       return this.weightsLoad(data.length) === 1;
     } catch {
       return false;
     }
+  }
+
+  // fp16-quantized checkpoints (tools/quantize_fp16.py) are half the download;
+  // expand back to the fp32 the engine expects. Detected by byte size against
+  // the known architectures.
+  dequantize(data) {
+    const obs = this.obsSize, A = this.actionN;
+    const floats = (h, l) => h * obs + (A + 1) * h + 3 * l * h * h;
+    const CAND = [[512, 3], [768, 4], [1024, 3]];
+    if (CAND.some(([h, l]) => floats(h, l) * 4 === data.length)) return data;  // fp32
+    if (!CAND.some(([h, l]) => floats(h, l) * 2 === data.length)) return data; // unknown: engine will refuse
+    const u16 = new Uint16Array(data.buffer, data.byteOffset, data.length / 2);
+    const out = new Float32Array(u16.length);
+    const bits = new Uint32Array(1);
+    const f32 = new Float32Array(bits.buffer);
+    for (let i = 0; i < u16.length; i++) {
+      const h = u16[i];
+      const s = (h & 0x8000) << 16;
+      let e = (h >> 10) & 0x1f;
+      let m = h & 0x3ff;
+      if (e === 0) {
+        if (m === 0) { bits[0] = s; }
+        else {                       // subnormal half -> normal float
+          e = 113;
+          do { m <<= 1; e--; } while ((m & 0x400) === 0);
+          bits[0] = s | (e << 23) | ((m & 0x3ff) << 13);
+        }
+      } else if (e === 31) { bits[0] = s | 0x7f800000 | (m << 13); }
+      else { bits[0] = s | ((e + 112) << 23) | (m << 13); }
+      out[i] = f32[0];
+    }
+    return new Uint8Array(out.buffer);
   }
 }

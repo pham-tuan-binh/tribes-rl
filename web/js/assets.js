@@ -84,7 +84,7 @@ export class Assets {
     put(a.misc, 'roadV', `${base}/terrain/road-v-half.png`);
     put(a.misc, 'roadD', `${base}/terrain/road-d-half.png`);
     let done = 0;
-    await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
+    await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length, done, jobs.length); })));
     return a;
   }
 

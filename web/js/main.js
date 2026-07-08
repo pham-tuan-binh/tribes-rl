@@ -15,7 +15,11 @@ function setLoad(label, frac) {
   $('loader-fill').style.transform = `scaleX(${frac})`;
 }
 function showLoader() { $('loader').classList.remove('is-out'); }
-function hideLoader() { setLoad('ready', 1); $('loader').classList.add('is-out'); }
+function hideLoader() {
+  setLoad('ready', 1);
+  $('loader').classList.add('is-out');
+  document.body.classList.add('ready');   // fades the game in (css)
+}
 
 const state = {
   mode: 'agents',          // 'agents' | 'human'
@@ -28,7 +32,8 @@ const state = {
                            // -1 = whole world, 0..N-1 = a fixed agent's fog
 };
 
-const assets = await Assets.load('assets', (f) => setLoad('sprites', f * 0.35));
+const assets = await Assets.load('assets',
+  (f, done, total) => setLoad(`sprites ${done}/${total}`, f * 0.35));
 let game, renderer, agent;
 
 async function loadEngine(players) {
@@ -41,7 +46,8 @@ async function loadEngine(players) {
     const rawAct = game.act;
     game.act = (a) => { logAction(game.activePlayer(), a, game.phase()); return rawAct(a); };
     renderer = new Renderer($('board'), game, assets);
-    const trained = await game.loadWeights((f) => setLoad('policy weights', 0.42 + f * 0.58));
+    const trained = await game.loadWeights((f, got, total) =>
+      setLoad(`policy ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} mb`, 0.42 + f * 0.58));
     agent = trained ? new TrainedAgent() : new RandomAgent();
     document.title = trained ? 'tribes-rl' : 'tribes-rl (random agents)';
     hideLoader();

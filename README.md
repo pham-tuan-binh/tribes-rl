@@ -40,11 +40,7 @@ pip install -e .
 puffer train polytopia                                # config comes from puffer/polytopia.ini
 ```
 
-Player count is a compile-time knob:
-
-```sh
-EXTRA_CFLAGS="-DENV_PLAYERS=4" puffer train polytopia
-```
+The env is player-agnostic: one model plays 2, 3 and 4 player games. Each episode rolls its player count uniformly in `[min_players, max_players]` (set in `polytopia.ini`), so a single training run learns every format at once. Unused agent seats are inert dummies with zero observation and zero reward.
 
 `puffer/train_lk.sh` wraps this for a remote box, and `puffer/match_lk.sh` plays two checkpoints against each other for gating.
 
@@ -59,12 +55,13 @@ The action mask contains exactly the legal choices for the current phase, so the
 
 ### Observation
 
-A flat `uint8` tensor, always from the observing player's perspective (1 = mine, 2 = enemy), with fog applied: unseen tiles show only fog, and opponents' stars and tech are hidden.
+A flat `uint8` tensor of 1251 bytes, the same size for every player count, always from the observing player's perspective (1 = mine, 2 = enemy), with fog applied: unseen tiles show only fog, and opponents' stars and tech are hidden.
 
 - 10 tile planes of 121 tiles each: terrain, resource, building, roads, city, unit type, unit owner, unit hp, unit status, selection cursor
-- globals: phase, pending verb, am-I-active, turn number, then one block per player (stars, score, cities, kills, tribe, 24 tech bits), self first, opponents in seat order
+- globals: phase, pending verb, am-I-active, turn number, then the SELF block (stars, score, cities, kills, tribe, 24 tech bits)
+- a pooled opponent block: identity-free summary of everyone else alive (count, seats until my next turn, their total and max cities, max score, total kills, and max stars/tech where fog allows)
 
-Sizes: 1272 bytes for 2 players, 1301 for 3, 1330 for 4.
+Pooling the opponents is what makes the model player-agnostic: the tile planes only ever say friend or foe, so per-opponent identity carried little signal anyway, and the layout extends unchanged to more than 4 players.
 
 ### Reward
 
@@ -85,7 +82,7 @@ Generic score shaping is off by default because Tribes score rewards temples and
 
 ### Performance on an RTX 5090
 
-With 4096 parallel agents and an 8.3M-param MinGRU policy (768 hidden, 4 layers), training runs at about 1.4M agent steps per second end to end, including learning. A 10B-step run finishes in about 2 hours. The env itself is plain C with no allocation in the step path, so throughput scales with cores.
+With 4096 parallel agents and an 8.2M-param MinGRU policy (768 hidden, 4 layers), training runs at about 1.8M agent steps per second end to end, including learning. A 10B-step run finishes in under 2 hours. The env itself is plain C with no allocation in the step path, so throughput scales with cores.
 
 ### Correctness
 
@@ -102,11 +99,13 @@ No framework, no bundler, no npm. Plain ES-module JavaScript over the WASM engin
 
 ```sh
 brew install emscripten     # once
-./web/build.sh              # builds dist/poly2.js, poly3.js, poly4.js
+./web/build.sh              # builds dist/poly.js (one module for all player counts)
 python3 web/serve.py        # http://localhost:8080
 ```
 
-Checkpoints go in `web/weights/` (`latest.bin` for 2 players, `latest_3p.bin`, `latest_4p.bin`). They are flat float32 exports of the trained policy. The bridge auto-detects the network size from the file, and samples with temperature 0.5 by default so spectated games look clean.
+One checkpoint (`web/weights/latest.bin`) serves every player count, so switching between 2, 3 and 4 players is instant: same engine, same weights, just a new game. The bridge auto-detects the network size from the file and samples with temperature 0.5 by default so spectated games look clean.
+
+Checkpoints can be fp16-quantized to halve the download (`tools/quantize_fp16.py`): the site detects fp16 by size and expands it back to fp32 in about 20ms before handing it to the engine. Max relative error is under 0.05%, which is lossless for inference.
 
 The site deploys to GitHub Pages automatically: `.github/workflows/pages.yml` builds the WASM in CI and publishes `web/` on every push to main. Set Pages > Source to "GitHub Actions" in the repo settings once.
 

@@ -11,7 +11,7 @@ No framework, no bundler, no npm: plain ES-module JavaScript over a WASM build o
 
 ```sh
 brew install emscripten   # once (or any emcc >= 3.x)
-./build.sh                # -> dist/poly2.js, poly3.js, poly4.js (one per player count)
+./build.sh                # -> dist/poly.js (one module for all player counts)
 python3 serve.py          # http://localhost:8080 (no-cache dev server)
 ```
 
@@ -19,7 +19,7 @@ python3 serve.py          # http://localhost:8080 (no-cache dev server)
 
 The trained policy runs client-side via puffernet (a small C inference lib vendored from PufferLib). Drop flat float32 checkpoint exports in `weights/`:
 
-- `latest.bin` for 2 players, `latest_3p.bin` and `latest_4p.bin` for more
+- one `latest.bin` serves every player count (fp16-quantized via tools/quantize_fp16.py)
 
 The bridge auto-detects the network architecture from the file size and samples actions with temperature 0.5 by default (`poly_set_temperature` to change it).
 
